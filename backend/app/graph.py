@@ -5,13 +5,15 @@ recorded with its transport (fastmcp or direct) in state.tool_calls.
 """
 from __future__ import annotations
 
+import functools
 from dataclasses import asdict
 from typing import Any, TypedDict
 
+from langgraph.errors import GraphBubbleUp
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
-from . import db, policy_kernel, proposer, workcell
+from . import db, policy_kernel, proposer, telemetry, workcell
 from .mcp_server import gateway
 
 CAMPAIGN_ELEMENTS = ["Nb", "Ti", "Cr", "Al"]
@@ -32,6 +34,27 @@ class CampaignState(TypedDict, total=False):
     triage: list[dict[str, Any]]
 
 
+def traced_node(name: str):
+    """Wrap a graph node in an OpenTelemetry span. A HITL interrupt is a pause, not an error."""
+
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper(state: CampaignState):
+            with telemetry.span(
+                f"node.{name}", passthrough=(GraphBubbleUp,), campaign_id=state.get("campaign_id"), mcp_mode=gateway.mode
+            ) as sp:
+                try:
+                    return fn(state)
+                except GraphBubbleUp:
+                    sp.set_attribute("paused_for_review", True)
+                    raise
+
+        return wrapper
+
+    return deco
+
+
+@traced_node("retrieve_context")
 def retrieve_context(state: CampaignState) -> dict[str, Any]:
     conn = db.connect()
     try:
@@ -53,6 +76,7 @@ def retrieve_context(state: CampaignState) -> dict[str, Any]:
     }
 
 
+@traced_node("propose_candidates")
 def propose_candidates(state: CampaignState) -> dict[str, Any]:
     candidates, mode, note, calls = proposer.propose(state["goal"], state["history"], gateway.call)
     return {
@@ -63,6 +87,7 @@ def propose_candidates(state: CampaignState) -> dict[str, Any]:
     }
 
 
+@traced_node("policy_kernel")
 def policy_kernel_node(state: CampaignState) -> dict[str, Any]:
     verdicts, approved, calls = [], [], []
     for cand in state["candidates"]:
@@ -79,7 +104,12 @@ def policy_kernel_node(state: CampaignState) -> dict[str, Any]:
             }
             for m in neg["exact_matches"]
         ]
-        verdict = policy_kernel.check(cand, prior)
+        with telemetry.span(
+            "policy.check", campaign_id=state.get("campaign_id"), candidate_id=cand["candidate_id"]
+        ) as psp:
+            verdict = policy_kernel.check(cand, prior)
+            psp.set_attribute("policy_status", "Allowed" if verdict.allowed else "Blocked")
+            psp.set_attribute("policy_rule", verdict.rule)
         verdicts.append(asdict(verdict))
         if verdict.allowed:
             approved.append(cand)
@@ -90,18 +120,27 @@ def policy_kernel_node(state: CampaignState) -> dict[str, Any]:
     }
 
 
+@traced_node("triage_and_hitl")
 def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
     triage: list[dict[str, Any]] = []
     for cand in state.get("approved", []):
-        telemetry = workcell.read_telemetry(cand["composition"], cand["processing"])
-        status = workcell.classify(telemetry)
+        telemetry_row = workcell.read_telemetry(cand["composition"], cand["processing"])
+        status = workcell.classify(telemetry_row)
+        with telemetry.span(
+            "sample.triage",
+            campaign_id=state.get("campaign_id"),
+            candidate_id=cand["candidate_id"],
+            cv_confidence=float(telemetry_row["sem_cv_confidence"]),
+            triage_status=status,
+        ):
+            pass
         record: dict[str, Any] = {
             "sample_id": f"S-{cand['candidate_id']}",
             "candidate_id": cand["candidate_id"],
             "composition": cand["composition"],
             "processing": cand["processing"],
             "status": status,
-            "telemetry": telemetry,
+            "telemetry": telemetry_row,
             "decision": None,
             "intuition_note": "",
         }
@@ -118,10 +157,10 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
                     "status": "Yellow",
                     "composition": cand["composition"],
                     "processing": cand["processing"],
-                    "telemetry": telemetry,
+                    "telemetry": telemetry_row,
                     "decision": None,
                     "reason": (
-                        f"SEM scan CV confidence {telemetry['sem_cv_confidence']:.2f} "
+                        f"SEM scan CV confidence {telemetry_row['sem_cv_confidence']:.2f} "
                         "(sensor ambiguity, not composition novelty)"
                     ),
                     "options": ["approve", "rescan", "kill"],

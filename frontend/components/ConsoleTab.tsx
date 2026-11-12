@@ -317,7 +317,18 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
       {/* Right: evidence drawer and span inspector */}
       <section className="space-y-4 lg:col-span-4">
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Evidence and lineage</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Evidence and lineage</h2>
+            <a
+              href="http://localhost:6006"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+              title="Live runs: project sdl-control-plane. Curated error-analysis examples: sdl-control-plane-seed."
+            >
+              View Live Trace in Phoenix ↗
+            </a>
+          </div>
           {sample ? (
             <div className="mt-2 space-y-2 text-xs">
               <div className="font-mono text-slate-800">{sample.sample_id}</div>

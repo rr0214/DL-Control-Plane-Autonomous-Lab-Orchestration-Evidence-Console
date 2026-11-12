@@ -8,8 +8,10 @@ from pathlib import Path
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
+from . import telemetry
 from .config import checkpoint_path
 from .graph import build_graph
+from .mcp_server import gateway
 
 VALID_DECISIONS = ("approve", "rescan", "kill")
 
@@ -24,15 +26,21 @@ class CampaignOrchestrator:
 
     def plan(self, campaign_id: str, thread_id: str) -> dict:
         config = {"configurable": {"thread_id": thread_id}}
-        with self._lock:
+        with self._lock, telemetry.span("campaign.plan", campaign_id=campaign_id, thread_id=thread_id, mcp_mode=gateway.mode) as sp:
             out = self.graph.invoke({"campaign_id": campaign_id}, config)
-            return self._summarize(thread_id, config, out)
+            summary = self._summarize(thread_id, config, out)
+            sp.set_attribute("status", summary["status"])
+            sp.set_attribute("blocked_count", sum(1 for v in summary["verdicts"] if not v["allowed"]))
+            return summary
 
     def review(self, thread_id: str, decision: str, note: str = "") -> dict:
         if decision not in VALID_DECISIONS:
             raise ValueError(f"decision must be one of {VALID_DECISIONS}")
         config = {"configurable": {"thread_id": thread_id}}
-        with self._lock:
+        # scientist_override is True when the human did anything other than approve the Yellow sample.
+        with self._lock, telemetry.span(
+            "scientist.review", thread_id=thread_id, decision=decision, scientist_override=decision != "approve"
+        ):
             out = self.graph.invoke(Command(resume={"decision": decision, "note": note}), config)
             return self._summarize(thread_id, config, out)
 

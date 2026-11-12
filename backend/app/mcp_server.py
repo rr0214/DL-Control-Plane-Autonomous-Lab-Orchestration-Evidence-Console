@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from . import db
+from . import db, telemetry
 from .chemistry import normalize_composition, normalize_processing
 from .optimizer import bayesian_optimizer
 
@@ -83,20 +83,50 @@ DIRECT_TOOLS = {
 
 # ---- FastMCP server -----------------------------------------------------------------------
 
+# The `mcp` package changed its API between major versions. Support both so the project
+# installs cleanly next to arize-phoenix (which pulls in mcp 2.x):
+#   mcp 1.x: mcp.server.fastmcp.FastMCP + create_connected_server_and_client_session
+#   mcp 2.x: mcp.server.mcpserver.MCPServer + mcp.client.Client (accepts a server directly)
+MCP_API: str | None = None
 try:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.fastmcp import FastMCP as _ServerClass
     from mcp.shared.memory import create_connected_server_and_client_session
 
-    _MCP_IMPORTED = True
-except ImportError:  # pragma: no cover - exercised only when mcp is not installed
-    _MCP_IMPORTED = False
+    MCP_API = "1.x"
+except ImportError:
+    try:
+        from mcp.client import Client as _MCPClient
+        from mcp.server.mcpserver import MCPServer as _ServerClass
+
+        MCP_API = "2.x"
+    except ImportError:  # pragma: no cover - exercised only when mcp is not installed
+        _ServerClass = None
+
+_MCP_IMPORTED = MCP_API is not None
 
 server = None
 if _MCP_IMPORTED:
-    server = FastMCP("sdl-control-plane")
+    server = _ServerClass("sdl-control-plane")
     server.tool()(propose_alloy_ratios)
     server.tool()(check_negative_runs)
     server.tool()(search_calphad_literature)
+
+
+async def _with_session(fn):
+    """Run `fn(session)` against the in-memory server. The session has call_tool and list_tools in both APIs."""
+    if MCP_API == "1.x":
+        async with create_connected_server_and_client_session(server._mcp_server) as session:
+            await session.initialize()
+            return await fn(session)
+    async with _MCPClient(server) as client:
+        return await fn(client)
+
+
+def list_tool_names() -> set[str]:
+    async def _list(session):
+        return {t.name for t in (await session.list_tools()).tools}
+
+    return asyncio.run(_with_session(_list))
 
 
 class ToolGateway:
@@ -108,6 +138,12 @@ class ToolGateway:
 
     def call(self, name: str, args: dict[str, Any]) -> tuple[dict, str]:
         """Returns (result, transport). transport is 'fastmcp' or 'direct'."""
+        with telemetry.span(f"mcp.{name}", tool=name) as sp:
+            result, transport = self._dispatch(name, args)
+            sp.set_attribute("mcp_mode", transport)
+            return result, transport
+
+    def _dispatch(self, name: str, args: dict[str, Any]) -> tuple[dict, str]:
         if name not in DIRECT_TOOLS:
             raise KeyError(f"Unknown tool {name}")
         if self.mode == "fastmcp":
@@ -118,10 +154,12 @@ class ToolGateway:
         return DIRECT_TOOLS[name](**args), "direct"
 
     async def _call_fastmcp(self, name: str, args: dict[str, Any]) -> dict:
-        async with create_connected_server_and_client_session(server._mcp_server) as session:
-            await session.initialize()
-            result = await session.call_tool(name, args)
-        if result.isError:
+        async def _call(session):
+            return await session.call_tool(name, args)
+
+        result = await _with_session(_call)
+        failed = result.is_error if MCP_API == "2.x" else result.isError
+        if failed:
             raise RuntimeError(result.content[0].text if result.content else "tool error")
         return json.loads(result.content[0].text)
 

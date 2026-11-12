@@ -8,7 +8,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import db, seed_camp014
+from . import db, seed_camp014, telemetry
 from .mcp_server import gateway
 from .orchestrator import CampaignOrchestrator
 
@@ -46,7 +46,7 @@ def _with_trace(thread_id: str, out: dict) -> dict:
 
 
 def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
-    app = FastAPI(title="SDL Control Plane API", version="0.3.0")
+    app = FastAPI(title="SDL Control Plane API", version="0.5.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -54,6 +54,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     app.state.orchestrator = orchestrator
+    telemetry.init_tracing()  # no-op if SDL_TRACING=off or Phoenix is not running
 
     def orch() -> CampaignOrchestrator:
         # Built on first use so importing the module does not touch the database.
@@ -63,7 +64,12 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
 
     @app.get("/api/health")
     def health() -> dict:
-        return {"status": "ok", "mcp_mode": gateway.mode}
+        return {
+            "status": "ok",
+            "mcp_mode": gateway.mode,
+            "tracing": telemetry.is_enabled(),
+            "phoenix_url": telemetry.PHOENIX_UI_URL,
+        }
 
     @app.get("/api/campaigns/{campaign_id}")
     def get_campaign(campaign_id: str) -> dict:

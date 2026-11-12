@@ -10,9 +10,9 @@ Built as a portfolio project to show product decisions: where the model is allow
 ./start.sh
 ```
 
-Then open http://localhost:3000. The API docs are at http://localhost:8000/docs.
+Then open http://localhost:3000. The API docs are at http://localhost:8000/docs. Arize Phoenix (traces and evals) is at http://localhost:6006.
 
-The script creates `.env` from `.env.example`, installs the Python and Node dependencies, and starts both servers. Ctrl+C stops both.
+The script creates `.env` from `.env.example`, installs the Python and Node dependencies (it uses `uv` when installed, which is much faster than `pip`), starts Phoenix, seeds it, then starts the API and the web app. Ctrl+C stops everything. The first start takes a few minutes because Phoenix is a large install.
 
 Requirements: Python 3.11 or newer, Node.js 18 or newer.
 
@@ -71,6 +71,34 @@ The Yellow trigger is sensor ambiguity (SEM CV confidence 0.71 in the demo), not
 
 Composition matching ignores element order, and processing matching ignores case.
 
+## Observability: Arize Phoenix
+
+Every run is traced with OpenTelemetry into Phoenix at http://localhost:6006. Tracing never blocks the app: spans export in the background, and if Phoenix is not running (or `SDL_TRACING=off`) the app runs normally without it.
+
+| Phoenix project | What is in it |
+|---|---|
+| `sdl-control-plane` | **Live** traces from the UI: `campaign.plan`, one span per graph node, one `mcp.<tool>` span per tool call, `policy.check`, `sample.triage`, `scientist.review` |
+| `sdl-control-plane-seed` | **Curated, illustrative** examples for error analysis. Not production data. |
+
+Span attributes: `campaign_id`, `mcp_mode`, `policy_status` (Allowed or Blocked), `cv_confidence`, and `scientist_override` (true when the scientist did anything other than approve a Yellow sample). A Yellow pause is recorded as a pause, not an error. Because the graph resumes by re-running the paused node, the triage node appears twice in a Yellow run: once when it pauses and once when it resumes.
+
+### Error-analysis workflow (Hamel Husain style)
+
+`app/seed_phoenix.py` runs once Phoenix is up (safe to re-run; it exits if the dataset exists). It writes six curated traces with human annotations from annotator `seed-script`:
+
+| Trace | Outcome | First upstream failure |
+|---|---|---|
+| Clean pass (new route for a known-good composition) | Pass | none |
+| Clean pass (novel composition) | Pass | none |
+| Hf (restricted element) proposed | Pass | `propose_candidates` (caught by the Policy Kernel) |
+| Repeat of Run-088 (Arc-Melt) | Pass | `propose_candidates` (caught by the Policy Kernel) |
+| False-positive Yellow on a clean alloy (`cv_confidence` 0.94) | Fail | `triage_and_hitl` |
+| Blurry SEM scan auto-advanced (`cv_confidence` 0.86) | Fail | `triage_and_hitl` |
+
+Each trace gets two annotations: `outcome` (Pass or Fail) and `first_upstream_failure` (the node where it first went wrong, with a one-line note). The labeled cases are promoted into the Phoenix dataset `sdl-golden-eval-v1`, where each row pairs a candidate with the status the system should produce.
+
+The two Fail traces describe failure modes of an earlier classifier setting. The current Yellow rule is `cv_confidence < 0.8`, so today's code would not pause on 0.94, and the blurry 0.86 scan is a gap in that rule. They are scenarios chosen to show the workflow, not a record of past runs.
+
 ## Repository layout
 
 ```
@@ -85,9 +113,12 @@ backend/
     workcell.py         Simulated telemetry and Green/Yellow/Red classifier
     mcp_server.py       FastMCP tool contract and in-memory ToolGateway
     literature.json     Curated CALPHAD and refractory-alloy references (DOIs checked)
+    telemetry.py        Phoenix tracing setup and span helper (degrades gracefully)
+    seed_phoenix.py     Seeds curated traces, annotations, and the golden dataset
     seed_camp014.py     RBAC, evidence receipts, span trees
     db.py               SQLite schema, seed data, lineage tables
-  tests/                pytest suite (policy, graph pause/resume, API, proposer)
+  tests/                pytest suite (policy, graph pause/resume, API, proposer, MCP, telemetry)
+  pyproject.toml        Dependencies (requirements.txt mirrors it)
 frontend/
   app/                  Next.js App Router pages
   components/           ConsoleTab, ArchitectureTab, EvalsTab
@@ -102,7 +133,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-Current suite: 27 tests covering policy rules, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, and probe behavior in both modes.
+Current suite: 34 tests covering policy rules, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
 
 ## Configuration
 
@@ -114,10 +145,13 @@ Copy `.env.example` to `.env`:
 | `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Model used for tool-calling |
 | `SDL_DB_PATH` | `backend/data/sdl.db` | Campaign and lineage database |
 | `SDL_CHECKPOINT_PATH` | `backend/data/checkpoints.sqlite` | LangGraph checkpoints |
+| `SDL_TRACING` | `on` | Set to `off` to disable Phoenix tracing |
+| `PHOENIX_COLLECTOR_ENDPOINT` | `http://localhost:6006` | Where traces are sent |
+| `SDL_PHOENIX_PROJECT` | `sdl-control-plane` | Phoenix project for live runs |
 
 ## Known limits
 
-- **Simulated data.** Telemetry, span timings, and eval numbers are demo values. The Evals tab labels its numbers as placeholders.
+- **Simulated data.** Telemetry, the in-app span inspector timings, and the Evals tab numbers are demo values. The Phoenix seed traces are curated examples, labeled as illustrative. Live Phoenix traces are real spans from real runs of this code.
 - **Optimizer is a stand-in.** `bayesian_optimizer` returns a fixed table. A real version would fit a surrogate model (such as a Gaussian process) on measured runs.
 - **OpenAI is not wired.** Only Anthropic is supported in real mode.
 - **Rescan does not re-queue a sample.** It is recorded as a decision, and the workflow moves on.
@@ -134,7 +168,7 @@ Three tools, defined once in `backend/app/mcp_server.py` with FastMCP:
 | `check_negative_runs` | Looks up prior runs with the same composition and route, including failed ones (for example, Run-088) |
 | `search_calphad_literature` | Returns phase-stability and CALPHAD references with DOIs |
 
-The graph calls these through an in-memory MCP session, so the protocol is real but no subprocess is needed. If that session fails, the same functions run directly, and the trace records which transport was used. Set `SDL_MCP_MODE=direct` to skip FastMCP.
+The graph calls these through an in-memory MCP session, so the protocol is real but no subprocess is needed. The code supports both `mcp` 1.x (`FastMCP`) and 2.x (`MCPServer`), because Phoenix pulls in 2.x. If that session fails, the same functions run directly, and the trace records which transport was used. Set `SDL_MCP_MODE=direct` to skip FastMCP.
 
 ## Design notes
 

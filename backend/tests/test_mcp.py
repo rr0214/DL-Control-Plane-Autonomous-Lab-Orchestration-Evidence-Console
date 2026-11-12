@@ -41,18 +41,9 @@ def test_search_literature_returns_doi_citations():
 
 def test_fastmcp_server_exposes_the_three_contract_tools():
     assert server is not None, "mcp package must be installed"
-    import asyncio
+    from app.mcp_server import list_tool_names
 
-    names = asyncio.run(_list_names())
-    assert names == {"propose_alloy_ratios", "check_negative_runs", "search_calphad_literature"}
-
-
-async def _list_names():
-    from mcp.shared.memory import create_connected_server_and_client_session
-
-    async with create_connected_server_and_client_session(server._mcp_server) as session:
-        await session.initialize()
-        return {t.name for t in (await session.list_tools()).tools}
+    assert list_tool_names() == {"propose_alloy_ratios", "check_negative_runs", "search_calphad_literature"}
 
 
 def test_gateway_uses_fastmcp_transport_by_default():
