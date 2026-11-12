@@ -192,7 +192,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Pre-flight gate</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Deterministic rules run before any sample is made. No model can override them.
+            The policy gate checks every recipe before any sample is made. No model can override it.
           </p>
           <button
             onClick={runPlan}
@@ -264,12 +264,15 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
       {/* Step 2 (center): live triage queue with the interactive HITL card. Widest, most prominent column. */}
       <section className="space-y-4 lg:col-span-6">
         <StepHeader n={2} title="Safety Triage Queue" emphasis />
+        <p className="-mt-2 text-sm text-slate-500">
+          A scientist reviews only after the first scan, when the sensor data is ambiguous.
+        </p>
         {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200">{error}</div>}
 
         {pending && (
           <div className="rounded-xl bg-amber-50 p-4 shadow-sm ring-1 ring-amber-300">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-amber-900">Needs a scientist: {pending.sample_id}</h2>
+              <h2 className="font-semibold text-amber-900">Needs a scientist: {candidateLabel(pending.candidate_id)} (Post-Scan Review)</h2>
               <Pill tone="yellow">Yellow</Pill>
             </div>
             <p className="mt-2 text-sm text-amber-900">{pending.reason}</p>
@@ -324,7 +327,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                 onClick={() => review(pending.sample_id, "kill")}
                 className="rounded-md bg-rose-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
               >
-                Kill
+                Reject
               </button>
             </div>
           </div>
