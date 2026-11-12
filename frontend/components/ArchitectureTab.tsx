@@ -11,14 +11,14 @@ const COMPONENTS: Component[] = [
     name: "RBAC governance",
     plane: "core",
     status: "built",
-    detail: "Roles decide who may approve, rescan, or kill a sample. Enforced on every review call (X-Role header).",
+    detail: "Roles decide who may approve, revise, or reject a recipe before synthesis. Enforced on every review call (X-Role header).",
   },
   {
     id: "langgraph",
     name: "LangGraph orchestrator",
     plane: "core",
     status: "built",
-    detail: "StateGraph with SQLite checkpointing. A Yellow sample pauses with interrupt() and resumes with Command(resume=...).",
+    detail: "StateGraph with SQLite checkpointing. A risky recipe pauses before synthesis with interrupt() and resumes with Command(resume=...).",
   },
   {
     id: "mcp",
@@ -48,6 +48,14 @@ const COMPONENTS: Component[] = [
     plane: "pluggable",
     status: "built",
     detail: "Claude tool-calling when ANTHROPIC_API_KEY is set. Picks element sets and routes; never writes ratios.",
+  },
+  {
+    id: "risk",
+    name: "Pre-synthesis risk model",
+    plane: "pluggable",
+    status: "planned",
+    detail:
+      "Mock lookup today (predicted ductility margin vs. Run-071, furnace blast radius, phase stability). Swap for a trained model. Only the restricted-element check is real.",
   },
   {
     id: "workcell",

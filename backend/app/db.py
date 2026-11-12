@@ -124,7 +124,7 @@ def save_sample(conn: sqlite3.Connection, thread_id: str, campaign_id: str, reco
             record.get("status"),
             record.get("decision"),
             record.get("intuition_note", ""),
-            json.dumps(record.get("telemetry", {})),
+            json.dumps(record.get("telemetry") or {}),
             _now(),
         ),
     )

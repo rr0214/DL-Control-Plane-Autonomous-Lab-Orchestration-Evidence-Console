@@ -1,7 +1,7 @@
 """Promote scientist overrides from LIVE Phoenix traces into a "needs expert label" dataset.
 
 This is the "once live" half of the Hamel-style workflow: when a scientist overrides the
-system (Rescan or Kill on a Yellow sample), that is a signal worth a closer look. This script
+system (Revise or Reject on a recipe at the pre-synthesis review), that is a signal worth a closer look. This script
 finds those live `scientist.review` spans (attribute scientist_override = true) in the
 `sdl-control-plane` project and adds one row per override to the Phoenix dataset
 `sdl-needs-expert-label`.
@@ -32,6 +32,7 @@ DATASET_NAME = "sdl-needs-expert-label"
 REVIEW_SPAN = "scientist.review"
 PLAN_SPAN = "campaign.plan"
 TRIAGE_SPAN = "sample.triage"
+PRESYNTH_SPAN = "presynthesis.review"
 SPAN_LIMIT = 1000
 
 
@@ -40,8 +41,11 @@ class OverrideRow:
     thread_id: str
     decision: str
     candidate_id: str | None
-    cv_confidence: float | None
+    predicted_ductility_margin: float | None
+    furnace_blast_radius: str | None
+    cv_confidence: float | None  # only for older traces, where the review happened after the scan
     triage_status: str | None
+    review_stage: str
     campaign_id: str | None
     review_span_id: str
     review_trace_id: str
@@ -54,6 +58,9 @@ class OverrideRow:
             "thread_id": self.thread_id,
             "campaign_id": self.campaign_id,
             "candidate_id": self.candidate_id,
+            "review_stage": self.review_stage,
+            "predicted_ductility_margin": self.predicted_ductility_margin,
+            "furnace_blast_radius": self.furnace_blast_radius,
             "cv_confidence": self.cv_confidence,
             "triage_status": self.triage_status,
         }
@@ -127,11 +134,28 @@ def _yellow_triage(triage_spans: list[dict]) -> dict | None:
     return yellow[0] if yellow else None
 
 
-def build_rows(review_spans: list[dict], plan_spans: list[dict], triage_spans: list[dict]) -> list[OverrideRow]:
+def _presynthesis_subject(spans: list[dict]) -> dict | None:
+    """The recipe that paused for review: the presynthesis.review span with review_required = true.
+    The node re-runs on resume, so the same candidate can appear twice; the first is enough."""
+    for s in sorted(spans, key=lambda s: s.get("start_time", "")):
+        if _attrs(s).get("review_required") in (True, "true", "True"):
+            return s
+    return None
+
+
+def build_rows(
+    review_spans: list[dict],
+    plan_spans: list[dict],
+    triage_spans: list[dict],
+    presynthesis_spans: list[dict] | None = None,
+) -> list[OverrideRow]:
     plan_by_thread = {_attrs(p).get("thread_id"): p for p in plan_spans if _attrs(p).get("thread_id")}
     triage_by_trace: dict[str, list[dict]] = {}
     for t in triage_spans:
         triage_by_trace.setdefault(t["context"]["trace_id"], []).append(t)
+    presynth_by_trace: dict[str, list[dict]] = {}
+    for t in presynthesis_spans or []:
+        presynth_by_trace.setdefault(t["context"]["trace_id"], []).append(t)
     ambiguous = ambiguous_threads(review_spans)
 
     rows: list[OverrideRow] = []
@@ -140,15 +164,20 @@ def build_rows(review_spans: list[dict], plan_spans: list[dict], triage_spans: l
         thread_id = a.get("thread_id") or ""
         plan = plan_by_thread.get(thread_id)
         plan_trace = plan["context"]["trace_id"] if plan else None
-        triage = _yellow_triage(triage_by_trace.get(plan_trace, [])) if plan_trace else None
-        ta = _attrs(triage) if triage else {}
+        presynth = _presynthesis_subject(presynth_by_trace.get(plan_trace, [])) if plan_trace else None
+        # Older traces (review after the scan) have no presynthesis span: fall back to the Yellow triage span.
+        triage = None if presynth else (_yellow_triage(triage_by_trace.get(plan_trace, [])) if plan_trace else None)
+        ta = _attrs(presynth) if presynth else (_attrs(triage) if triage else {})
         rows.append(
             OverrideRow(
                 thread_id=thread_id,
                 decision=str(a.get("decision", "")),
                 candidate_id=ta.get("candidate_id"),
+                predicted_ductility_margin=ta.get("predicted_ductility_margin"),
+                furnace_blast_radius=ta.get("furnace_blast_radius"),
                 cv_confidence=ta.get("cv_confidence"),
                 triage_status=ta.get("triage_status"),
+                review_stage="pre_synthesis" if presynth else ("post_scan_legacy" if triage else "unknown"),
                 campaign_id=_attrs(plan).get("campaign_id") if plan else None,
                 review_span_id=review["context"]["span_id"],
                 review_trace_id=review["context"]["trace_id"],
@@ -184,13 +213,12 @@ def promote(client: Any, project: str, dataset: str = DATASET_NAME, dry_run: boo
     plan_spans = client.spans.get_spans(project_identifier=project, name=PLAN_SPAN, limit=SPAN_LIMIT)
     wanted_threads = {_attrs(s).get("thread_id") for s in overrides}
     plan_traces = [p["context"]["trace_id"] for p in plan_spans if _attrs(p).get("thread_id") in wanted_threads]
-    triage_spans = (
-        client.spans.get_spans(project_identifier=project, name=TRIAGE_SPAN, trace_ids=plan_traces, limit=SPAN_LIMIT)
-        if plan_traces
-        else []
-    )
+    def _spans_in_plans(name: str) -> list[dict]:
+        if not plan_traces:
+            return []
+        return client.spans.get_spans(project_identifier=project, name=name, trace_ids=plan_traces, limit=SPAN_LIMIT)
 
-    rows = build_rows(review_spans, plan_spans, triage_spans)
+    rows = build_rows(review_spans, plan_spans, _spans_in_plans(TRIAGE_SPAN), _spans_in_plans(PRESYNTH_SPAN))
     exists, present = _existing_review_span_ids(client, dataset)
     new_rows = [r for r in rows if r.review_span_id not in present]
     result.already_present = len(rows) - len(new_rows)
@@ -210,7 +238,7 @@ def promote(client: Any, project: str, dataset: str = DATASET_NAME, dry_run: boo
             outputs=outputs,
             metadata=metadata,
             dataset_description=(
-                "Live scientist overrides (Rescan or Kill) pulled from Phoenix traces. Each row records what "
+                "Live scientist overrides (Revise or Reject) pulled from Phoenix traces. Each row records what "
                 "the scientist did and still needs an expert to say what the system SHOULD have done."
             ),
         )
@@ -237,15 +265,20 @@ def format_summary(r: PromotionResult, phoenix_url: str = telemetry.PHOENIX_UI_U
         lines.append("")
         lines.append("Rows" + (" that would be added:" if r.dry_run else " added:"))
         for row in r.added:
-            cv = f"{row.cv_confidence:.2f}" if isinstance(row.cv_confidence, (int, float)) else "n/a"
+            if isinstance(row.predicted_ductility_margin, (int, float)):
+                signal = f"margin={row.predicted_ductility_margin:.2f}"
+            elif isinstance(row.cv_confidence, (int, float)):
+                signal = f"cv={row.cv_confidence:.2f}"
+            else:
+                signal = "signal=n/a"
             flag = "   [thread link ambiguous]" if row.thread_link_ambiguous else ""
             lines.append(
-                f"  thread {row.thread_id:<16} decision={row.decision:<7} candidate={row.candidate_id or 'n/a':<5} cv={cv}{flag}"
+                f"  thread {row.thread_id:<16} decision={row.decision:<7} candidate={row.candidate_id or 'n/a':<5} {signal}{flag}"
             )
     if r.overrides == 0:
         lines.append("")
-        lines.append("No scientist overrides found yet. In the console, plan a batch and choose Rescan or Kill")
-        lines.append("on the Yellow sample, then run this again.")
+        lines.append("No scientist overrides found yet. In the console, plan a batch and choose Revise or Reject")
+        lines.append("on the recipe under review, then run this again.")
     if r.ambiguous_threads:
         lines.append("")
         lines.append(f"Warning: {len(r.ambiguous_threads)} thread(s) have more than one review: {', '.join(r.ambiguous_threads)}.")

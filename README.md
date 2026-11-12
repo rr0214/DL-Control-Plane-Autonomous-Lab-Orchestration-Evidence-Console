@@ -27,7 +27,7 @@ In both modes:
 
 - **Ratios come only from `bayesian_optimizer`.** The model never writes stoichiometry.
 - **Two boundary probes are always appended:** a candidate containing the restricted element Hf, and an exact repeat of Run-088 (Nb50-Ti20-Cr15-Al15, Arc-Melt). The Policy Kernel blocks both, so the gate is always visible.
-- **One demo Yellow control is always appended:** the same composition as Run-088 on a new route (Additive/Anneal). The gate allows it, and its SEM scan is ambiguous, so the scientist's review card always appears. This is a demo device that guarantees the human-in-the-loop step is visible, not a model choice.
+- **One demo Yellow control is always appended:** the same composition as Run-088 on a new route (Additive/Anneal). The gate allows it, and its mock pre-synthesis risk signals are borderline, so the scientist's review card always appears before anything is made. This is a demo device that guarantees the human-in-the-loop step is visible, not a model choice.
 
 ## Architecture
 
@@ -43,9 +43,10 @@ frontend (Next.js, Tailwind)            backend (FastAPI)
                               SqliteSaver checkpoints every step
                                                        │
   retrieve_context ─▶ propose_candidates ─▶ policy_kernel ─▶ triage_and_hitl
-   (SQLite history)   (LLM tool-calling      (deterministic,   (Green auto-advances,
-                       or mock + probes)      under 50 ms)      Red early-kill,
-                                                                Yellow interrupt())
+   (SQLite history)   (LLM tool-calling      (deterministic,   (risky recipe: interrupt() BEFORE
+                       or mock + probes)      under 50 ms)      synthesis. Then scan triage for
+                                                                what was made: Green advances,
+                                                                Red early-kills.)
 ```
 
 ### Core platform vs pluggable parts
@@ -55,11 +56,14 @@ frontend (Next.js, Tailwind)            backend (FastAPI)
 
 ## Human-in-the-loop
 
-A Yellow sample pauses the graph with `interrupt()`. The checkpointer saves its state, so a scientist can review it hours or days later. Resuming with `Command(resume=...)` continues from that exact point.
+The review happens **before any sample is made**. After the Policy Kernel allows a recipe, mock pre-synthesis risk signals are computed (predicted ductility margin vs. Run-071, furnace blast radius, phase stability, restricted elements). If the risk is high (ductility margin under 0.80), the graph pauses with `interrupt()` and the scientist approves, revises, or rejects the recipe. The checkpointer saves its state, so the review can happen hours or days later. Resuming with `Command(resume=...)` continues from that exact point.
 
-Each review decision is checked against RBAC. For example, an Operator can rescan a sample but cannot approve it. Every decision is stored with a receipt hash and an optional one-line intuition note.
+- **Approve:** the recipe is synthesized (simulated) and scanned. Scan triage runs on what was made: Green advances, Red early-kills, and an ambiguous scan is flagged for follow-up without pausing again.
+- **Revise or Reject:** the recipe is held. No sample is made and no scan exists. It is recorded as `Held`.
 
-The Yellow trigger is sensor ambiguity (SEM CV confidence 0.71 in the demo), not composition novelty. That distinction tells the scientist the measurement is uncertain, not that the alloy is new.
+Each review decision is checked against RBAC. For example, an Operator can revise a recipe but cannot approve or reject it. Every decision is stored with a receipt hash and an optional one-line intuition note.
+
+The risk signals are a **mock lookup** with fixed demo values, labeled as such in the UI. Only the restricted-element check is real. A production version would use a trained model.
 
 ## Policy Kernel rules
 
@@ -80,7 +84,7 @@ Every run is traced with OpenTelemetry into Phoenix at http://localhost:6006. Tr
 | `sdl-control-plane` | **Live** traces from the UI: `campaign.plan`, one span per graph node, one `mcp.<tool>` span per tool call, `policy.check`, `sample.triage`, `scientist.review` |
 | `sdl-control-plane-seed` | **Curated, illustrative** examples for error analysis. Not production data. |
 
-Span attributes: `campaign_id`, `mcp_mode`, `policy_status` (Allowed or Blocked), `cv_confidence`, and `scientist_override` (true when the scientist did anything other than approve a Yellow sample). A Yellow pause is recorded as a pause, not an error. Because the graph resumes by re-running the paused node, the triage node appears twice in a Yellow run: once when it pauses and once when it resumes.
+Span attributes: `campaign_id`, `mcp_mode`, `policy_status` (Allowed or Blocked), `cv_confidence`, and `scientist_override` (true when the scientist did anything other than approve the recipe), plus `predicted_ductility_margin`, `furnace_blast_radius` and `review_required` on the `presynthesis.review` span. A pause is recorded as a pause, not an error. Because the graph resumes by re-running the paused node, that node appears twice in a reviewed run: once when it pauses and once when it resumes.
 
 ### Error-analysis workflow (Hamel Husain style)
 
@@ -97,7 +101,7 @@ Span attributes: `campaign_id`, `mcp_mode`, `policy_status` (Allowed or Blocked)
 
 Each trace gets two annotations: `outcome` (Pass or Fail) and `first_upstream_failure` (the node where it first went wrong, with a one-line note). The labeled cases are promoted into the Phoenix dataset `sdl-golden-eval-v1`, where each row pairs a candidate with the status the system should produce.
 
-The two Fail traces describe failure modes of an earlier classifier setting. The current Yellow rule is `cv_confidence < 0.8`, so today's code would not pause on 0.94, and the blurry 0.86 scan is a gap in that rule. They are scenarios chosen to show the workflow, not a record of past runs.
+The two Fail traces describe failure modes of an earlier build, when a scientist reviewed samples after the scan. The current scan rule is `cv_confidence < 0.8`, so today's code would not flag 0.94, and the blurry 0.86 scan is a gap in that rule. In the current flow the human review happens before synthesis. They are scenarios chosen to show the workflow, not a record of past runs.
 
 ## Repository layout
 
@@ -110,7 +114,8 @@ backend/
     proposer.py         LLM tool-calling or mock plan, plus boundary probes
     policy_kernel.py    Deterministic gate
     optimizer.py        bayesian_optimizer tool (mock surrogate)
-    workcell.py         Simulated telemetry and Green/Yellow/Red classifier
+    presynthesis.py     Mock pre-synthesis risk signals (deterministic)
+    workcell.py         Simulated scan telemetry and Green/Yellow/Red classifier
     mcp_server.py       FastMCP tool contract and in-memory ToolGateway
     literature.json     Curated CALPHAD and refractory-alloy references (DOIs checked)
     telemetry.py        Phoenix tracing setup and span helper (degrades gracefully)
@@ -133,7 +138,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-Current suite: 34 tests covering policy rules, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
+Current suite: 66 tests covering policy rules, the pre-synthesis risk signals, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
 
 ## Configuration
 
@@ -154,7 +159,7 @@ Copy `.env.example` to `.env`:
 - **Simulated data.** Telemetry, the in-app span inspector timings, and the Evals tab numbers are demo values. The Phoenix seed traces are curated examples, labeled as illustrative. Live Phoenix traces are real spans from real runs of this code.
 - **Optimizer is a stand-in.** `bayesian_optimizer` returns a fixed table. A real version would fit a surrogate model (such as a Gaussian process) on measured runs.
 - **OpenAI is not wired.** Only Anthropic is supported in real mode.
-- **Rescan does not re-queue a sample.** It is recorded as a decision, and the workflow moves on.
+- **Revise does not re-queue a recipe.** It is recorded as a decision and the recipe is held. Nothing is re-proposed automatically.
 - **Literature is a curated list.** Six papers were checked against their text. Search is local, not live.
 - **Reset Demo clears only CAMP-014.** Plans, samples, and checkpoints for that campaign are removed. Seed runs stay.
 

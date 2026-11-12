@@ -121,7 +121,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
     }
   }
 
-  async function review(sampleId: string, decision: "approve" | "rescan" | "kill") {
+  async function review(sampleId: string, decision: "approve" | "revise" | "reject") {
     setBusy(true);
     setError(null);
     try {
@@ -265,25 +265,44 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
       <section className="space-y-4 lg:col-span-6">
         <StepHeader n={2} title="Safety Triage Queue" emphasis />
         <p className="-mt-2 text-sm text-slate-500">
-          A scientist reviews only after the first scan, when the sensor data is ambiguous.
+          A scientist reviews risky recipes here, before any sample is made.
         </p>
         {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200">{error}</div>}
 
         {pending && (
           <div className="rounded-xl bg-amber-50 p-4 shadow-sm ring-1 ring-amber-300">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-amber-900">Needs a scientist: {candidateLabel(pending.candidate_id)} (Post-Scan Review)</h2>
+              <h2 className="font-semibold text-amber-900">Needs a scientist: {candidateLabel(pending.candidate_id)} (Pre-Synthesis Review)</h2>
               <Pill tone="yellow">Yellow</Pill>
             </div>
             <p className="mt-2 text-sm text-amber-900">{pending.reason}</p>
             <div className="mt-2 font-mono text-xs text-amber-900">
               {pending.composition} · {pending.processing}
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-amber-900">
-              <div>SEM CV {pending.telemetry.sem_cv_confidence.toFixed(2)}</div>
-              <div>XRD match {pending.telemetry.xrd_phase_match.toFixed(2)}</div>
-              <div>Crack {pending.telemetry.crack_detected ? "yes" : "no"}</div>
+            <div className="mt-3 rounded-lg bg-white/70 p-3 text-sm text-amber-950 ring-1 ring-amber-200">
+              <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-wide text-amber-800">
+                <span>Pre-synthesis risk signals</span>
+                <Pill tone="slate">Mock model (demo values)</Pill>
+              </div>
+              <ul className="space-y-1">
+                <li>
+                  Predicted ductility margin vs. {pending.risk.baseline_run}:{" "}
+                  <strong>
+                    {pending.risk.ductility_label} ({pending.risk.predicted_ductility_margin.toFixed(2)})
+                  </strong>
+                </li>
+                <li>
+                  Furnace blast radius: <strong>{pending.risk.furnace_blast_radius}</strong>
+                </li>
+                <li>
+                  Phase stability: {pending.risk.phase_stability.toFixed(2)} | Restricted elements:{" "}
+                  {pending.risk.restricted_elements.length ? pending.risk.restricted_elements.join(", ") : "None"}
+                </li>
+              </ul>
             </div>
+            <p className="mt-2 text-xs text-amber-900">
+              Nothing has been made yet. Approve sends this recipe to synthesis. Revise or Reject holds it.
+            </p>
             <div className="mt-3 flex items-center gap-2">
               <label className="text-xs text-amber-900" htmlFor="role">
                 Acting as
@@ -317,14 +336,14 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
               </button>
               <button
                 disabled={busy}
-                onClick={() => review(pending.sample_id, "rescan")}
+                onClick={() => review(pending.sample_id, "revise")}
                 className="rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
               >
-                Rescan
+                Revise
               </button>
               <button
                 disabled={busy}
-                onClick={() => review(pending.sample_id, "kill")}
+                onClick={() => review(pending.sample_id, "reject")}
                 className="rounded-md bg-rose-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
               >
                 Reject
@@ -353,6 +372,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                     <div className="font-mono text-xs text-slate-700">{t.sample_id}</div>
                     <div className="font-mono text-base text-slate-900">{t.composition}</div>
                     <div className="text-sm text-slate-500">{t.processing}</div>
+                    {t.follow_up && <div className="mt-1 max-w-md text-xs text-slate-500">{t.follow_up}</div>}
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <Pill tone={statusTone(t.status)}>{t.status}</Pill>

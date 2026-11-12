@@ -26,6 +26,13 @@ def plan(trace, thread):
     return span("campaign.plan", trace, f"plan-{trace}", "2026-11-12T02:59:00+00:00", thread_id=thread, campaign_id="CAMP-014")
 
 
+def presynth(trace, cand, margin=0.71, blast="high", required=True, start="2026-11-12T02:59:00+00:00"):
+    return span(
+        "presynthesis.review", trace, f"pre-{trace}-{cand}-{start[-8:]}", start,
+        candidate_id=cand, predicted_ductility_margin=margin, furnace_blast_radius=blast, review_required=required,
+    )
+
+
 def triage(trace, cand, status="Yellow", cv=0.71, start="2026-11-12T02:59:01+00:00"):
     return span("sample.triage", trace, f"tri-{trace}-{cand}-{start[-8:]}", start, candidate_id=cand, triage_status=status, cv_confidence=cv)
 
@@ -76,27 +83,27 @@ class FakeClient:
 
 def two_override_world():
     return [
-        plan("P1", "t1"), triage("P1", "C-3"), review("R1", "t1", "kill", "2026-11-12T03:00:00+00:00"),
-        plan("P2", "t2"), triage("P2", "C-3"), review("R2", "t2", "rescan", "2026-11-12T04:00:00+00:00"),
-        plan("P3", "t3"), triage("P3", "C-3"), review("R3", "t3", "approve", "2026-11-12T05:00:00+00:00"),
+        plan("P1", "t1"), presynth("P1", "C-3"), review("R1", "t1", "reject", "2026-11-12T03:00:00+00:00"),
+        plan("P2", "t2"), presynth("P2", "C-3"), review("R2", "t2", "revise", "2026-11-12T04:00:00+00:00"),
+        plan("P3", "t3"), presynth("P3", "C-3"), review("R3", "t3", "approve", "2026-11-12T05:00:00+00:00"),
     ]
 
 
 # ---- selection and joining --------------------------------------------------------------------
 
 def test_only_overrides_are_selected():
-    reviews = [review("R1", "t1", "kill"), review("R2", "t2", "approve"), review("R3", "t3", "rescan")]
+    reviews = [review("R1", "t1", "reject"), review("R2", "t2", "approve"), review("R3", "t3", "revise")]
     assert [s["context"]["span_id"] for s in po.select_overrides(reviews)] == ["R1", "R3"]
 
 
 def test_review_is_joined_to_its_plan_by_thread_id_and_yellow_sample():
-    spans = [plan("P1", "t1"), triage("P1", "C-1", status="Green", cv=0.95), triage("P1", "C-3"), review("R1", "t1", "kill")]
+    spans = [plan("P1", "t1"), triage("P1", "C-1", status="Green", cv=0.95), triage("P1", "C-3"), review("R1", "t1", "reject")]
     (row,) = po.build_rows(
         [s for s in spans if s["name"] == "scientist.review"],
         [s for s in spans if s["name"] == "campaign.plan"],
         [s for s in spans if s["name"] == "sample.triage"],
     )
-    assert (row.thread_id, row.decision, row.candidate_id, row.cv_confidence) == ("t1", "kill", "C-3", 0.71)
+    assert (row.thread_id, row.decision, row.candidate_id, row.cv_confidence) == ("t1", "reject", "C-3", 0.71)
     assert row.plan_trace_id == "P1" and row.campaign_id == "CAMP-014"
     assert row.thread_link_ambiguous is False
 
@@ -107,19 +114,19 @@ def test_duplicate_triage_spans_from_a_resume_do_not_duplicate_the_row():
         plan("P1", "t1"),
         triage("P1", "C-3", start="2026-11-12T02:59:01+00:00"),
         triage("P1", "C-3", start="2026-11-12T03:00:01+00:00"),
-        review("R1", "t1", "kill"),
+        review("R1", "t1", "reject"),
     ]
     rows = po.build_rows([spans[3]], [spans[0]], [spans[1], spans[2]])
     assert len(rows) == 1 and rows[0].candidate_id == "C-3"
 
 
 def test_review_with_no_matching_plan_still_produces_a_row_with_gaps():
-    (row,) = po.build_rows([review("R1", "ghost", "kill")], [], [])
+    (row,) = po.build_rows([review("R1", "ghost", "reject")], [], [])
     assert row.plan_trace_id is None and row.candidate_id is None and row.cv_confidence is None
 
 
 def test_threads_with_multiple_reviews_are_flagged_ambiguous():
-    reviews = [review("R1", "t1", "kill"), review("R2", "t1", "rescan"), review("R3", "t2", "kill")]
+    reviews = [review("R1", "t1", "reject"), review("R2", "t1", "revise"), review("R3", "t2", "reject")]
     assert po.ambiguous_threads(reviews) == {"t1"}
     rows = po.build_rows(reviews, [plan("P1", "t1"), plan("P2", "t2")], [])
     assert {r.review_span_id: r.thread_link_ambiguous for r in rows} == {"R1": True, "R2": True, "R3": False}
@@ -134,7 +141,7 @@ def test_promote_creates_the_dataset_with_overrides_only():
     rows = client.datasets.store[po.DATASET_NAME]
     assert len(rows) == 2 and len(result.added) == 2
     assert result.review_spans == 3 and result.overrides == 2
-    assert {r["output"]["scientist_decision"] for r in rows} == {"kill", "rescan"}  # the approve is not promoted
+    assert {r["output"]["scientist_decision"] for r in rows} == {"reject", "revise"}  # the approve is not promoted
 
 
 def test_rows_are_marked_unlabeled_and_never_claim_an_expected_outcome():
@@ -159,7 +166,7 @@ def test_new_override_is_appended_to_the_existing_dataset():
     world = two_override_world()
     client = FakeClient(world)
     po.promote(client, "sdl-control-plane")
-    client.spans.spans += [plan("P4", "t4"), triage("P4", "C-3"), review("R4", "t4", "kill", "2026-11-12T06:00:00+00:00")]
+    client.spans.spans += [plan("P4", "t4"), triage("P4", "C-3"), review("R4", "t4", "reject", "2026-11-12T06:00:00+00:00")]
     result = po.promote(client, "sdl-control-plane")
     assert [r.thread_id for r in result.added] == ["t4"] and result.already_present == 2
     assert client.datasets.appended == [po.DATASET_NAME]
@@ -188,13 +195,13 @@ def test_summary_shows_counts_rows_and_next_step():
     client = FakeClient(two_override_world())
     text = po.format_summary(po.promote(client, "sdl-control-plane"))
     assert "Review spans found:" in text and "Overrides (not approve):" in text
-    assert po.DATASET_NAME in text and "decision=kill" in text and "decision=rescan" in text
-    assert "cv=0.71" in text and "Each row still needs an expert label" in text
+    assert po.DATASET_NAME in text and "decision=reject" in text and "decision=revise" in text
+    assert "margin=0.71" in text and "Each row still needs an expert label" in text
     assert "Warning" not in text  # clean data, so no ambiguity warning
 
 
 def test_summary_warns_about_repeated_thread_reviews():
-    spans = [plan("P1", "t1"), triage("P1", "C-3"), review("R1", "t1", "kill"), review("R2", "t1", "rescan")]
+    spans = [plan("P1", "t1"), triage("P1", "C-3"), review("R1", "t1", "reject"), review("R2", "t1", "revise")]
     text = po.format_summary(po.promote(FakeClient(spans), "sdl-control-plane"))
     assert "thread_link_ambiguous" in text and "[thread link ambiguous]" in text and "Reset Demo" in text
 
@@ -212,3 +219,36 @@ def test_script_only_touches_phoenix_not_the_app():
     src = open(po.__file__, encoding="utf-8").read()
     for forbidden in ("from . import db", "from .api", "from .graph", "orchestrator", "sqlite3"):
         assert forbidden not in src
+
+
+def test_pre_synthesis_review_is_joined_with_risk_signals_even_with_no_scan():
+    # A rejected recipe is never synthesized, so there is no sample.triage span at all.
+    spans = [plan("P1", "t1"), presynth("P1", "C-1", margin=0.92, blast="low", required=False),
+             presynth("P1", "C-3"), review("R1", "t1", "reject")]
+    rows = po.build_rows(
+        [spans[3]], [spans[0]], [], [s for s in spans if s["name"] == "presynthesis.review"]
+    )
+    (row,) = rows
+    assert row.candidate_id == "C-3" and row.review_stage == "pre_synthesis"
+    assert row.predicted_ductility_margin == 0.71 and row.furnace_blast_radius == "high"
+    assert row.cv_confidence is None
+
+
+def test_older_traces_without_a_presynthesis_span_fall_back_to_the_yellow_scan():
+    spans = [plan("P1", "t1"), triage("P1", "C-3"), review("R1", "t1", "reject")]
+    (row,) = po.build_rows([spans[2]], [spans[0]], [spans[1]])
+    assert row.review_stage == "post_scan_legacy" and row.cv_confidence == 0.71
+    assert row.predicted_ductility_margin is None
+
+
+def test_summary_shows_the_ductility_margin_for_pre_synthesis_rows():
+    text = po.format_summary(po.promote(FakeClient(two_override_world()), "sdl-control-plane"))
+    assert "margin=0.71" in text and "decision=reject" in text
+
+
+def test_dataset_inputs_carry_the_pre_synthesis_signals():
+    client = FakeClient(two_override_world())
+    po.promote(client, "sdl-control-plane")
+    first = client.datasets.store[po.DATASET_NAME][0]["input"]
+    assert first["review_stage"] == "pre_synthesis"
+    assert first["predicted_ductility_margin"] == 0.71 and first["furnace_blast_radius"] == "high"

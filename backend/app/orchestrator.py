@@ -13,7 +13,7 @@ from .config import checkpoint_path
 from .graph import build_graph
 from .mcp_server import gateway
 
-VALID_DECISIONS = ("approve", "rescan", "kill")
+VALID_DECISIONS = ("approve", "revise", "reject")
 
 
 class CampaignOrchestrator:

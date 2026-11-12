@@ -11,12 +11,12 @@ RBAC = {
     "tenant": "SDL-Internal",
     "export_control": "ITAR",
     "roles": [
-        {"role": "Scientist (PI)", "permissions": ["approve", "rescan", "kill", "view_evidence"]},
-        {"role": "Operator", "permissions": ["rescan", "view_evidence"]},
+        {"role": "Scientist (PI)", "permissions": ["approve", "revise", "reject", "view_evidence"]},
+        {"role": "Operator", "permissions": ["revise", "view_evidence"]},
         {"role": "Policy Owner", "permissions": ["view_evidence", "edit_policy"]},
         {"role": "Auditor", "permissions": ["view_evidence", "export_receipts"]},
     ],
-    "decision_permissions": {"approve": "approve", "rescan": "rescan", "kill": "kill"},
+    "decision_permissions": {"approve": "approve", "revise": "revise", "reject": "reject"},
     "principle": "Agents propose, humans decide at HITL gates, and no role can override the Policy Kernel.",
 }
 
@@ -27,7 +27,8 @@ def make_receipt(record: dict) -> dict:
     return {
         "receipt_id": f"RCPT-{digest[:12]}",
         "content_sha256": digest,
-        "instrument": record.get("instrument", "SEM-02"),
+        "instrument": record.get("instrument")
+        or ("none (held before synthesis)" if record.get("status") == "Held" else "SEM-02"),
         "recorded_at": record["recorded_at"],
         "signed_by": "workcell-gateway",
     }

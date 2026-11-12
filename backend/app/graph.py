@@ -13,7 +13,7 @@ from langgraph.errors import GraphBubbleUp
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
-from . import db, policy_kernel, proposer, telemetry, workcell
+from . import db, policy_kernel, presynthesis, proposer, telemetry, workcell
 from .mcp_server import gateway
 
 CAMPAIGN_ELEMENTS = ["Nb", "Ti", "Cr", "Al"]
@@ -122,8 +122,65 @@ def policy_kernel_node(state: CampaignState) -> dict[str, Any]:
 
 @traced_node("triage_and_hitl")
 def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
+    """Human review BEFORE synthesis, then scan triage for whatever was actually made.
+
+    1. Every recipe the Policy Kernel allowed gets mock pre-synthesis risk signals.
+    2. If the risk is high (borderline ductility margin), the graph pauses with interrupt() so a
+       scientist can approve, revise, or reject the recipe. Nothing physical exists yet.
+    3. Only approved (or low-risk) recipes are synthesized and scanned. Revised or rejected
+       recipes are held: no sample, no scan.
+    The checkpointer saves state while paused, so the review can happen hours or days later.
+    """
     triage: list[dict[str, Any]] = []
     for cand in state.get("approved", []):
+        risk = presynthesis.risk_signals(cand["composition"], cand["processing"])
+        review_required = presynthesis.needs_review(risk)
+        with telemetry.span(
+            "presynthesis.review",
+            campaign_id=state.get("campaign_id"),
+            candidate_id=cand["candidate_id"],
+            predicted_ductility_margin=risk["predicted_ductility_margin"],
+            furnace_blast_radius=risk["furnace_blast_radius"],
+            review_required=review_required,
+        ):
+            pass
+        record: dict[str, Any] = {
+            "sample_id": f"S-{cand['candidate_id']}",
+            "candidate_id": cand["candidate_id"],
+            "composition": cand["composition"],
+            "processing": cand["processing"],
+            "status": None,
+            "risk": risk,
+            "telemetry": None,
+            "decision": None,
+            "intuition_note": "",
+            "follow_up": None,
+        }
+        if review_required:
+            # Pauses the graph BEFORE synthesis. The scan telemetry does not exist yet.
+            reply = interrupt(
+                {
+                    "stage": "pre_synthesis",
+                    "sample_id": record["sample_id"],
+                    "candidate_id": cand["candidate_id"],
+                    "status": "Yellow",
+                    "composition": cand["composition"],
+                    "processing": cand["processing"],
+                    "risk": risk,
+                    "decision": None,
+                    "reason": presynthesis.review_reason(risk),
+                    "options": ["approve", "revise", "reject"],
+                }
+            )
+            record["decision"] = reply["decision"]
+            record["intuition_note"] = reply.get("note", "")
+            if record["decision"] != "approve":
+                record["status"] = "Held"
+                record["follow_up"] = "Not synthesized: held at pre-synthesis review."
+                triage.append(record)
+                continue
+
+        # Synthesis is simulated. Scan data only exists for recipes that were actually made.
         telemetry_row = workcell.read_telemetry(cand["composition"], cand["processing"])
         status = workcell.classify(telemetry_row)
         with telemetry.span(
@@ -134,40 +191,15 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
             triage_status=status,
         ):
             pass
-        record: dict[str, Any] = {
-            "sample_id": f"S-{cand['candidate_id']}",
-            "candidate_id": cand["candidate_id"],
-            "composition": cand["composition"],
-            "processing": cand["processing"],
-            "status": status,
-            "telemetry": telemetry_row,
-            "decision": None,
-            "intuition_note": "",
-        }
-        if status == "Green":
-            record["decision"] = "auto_advance"
-        elif status == "Red":
-            record["decision"] = "early_kill"
-        else:
-            # Pauses the graph. The checkpointer saves state until a scientist resumes it.
-            reply = interrupt(
-                {
-                    "sample_id": record["sample_id"],
-                    "candidate_id": cand["candidate_id"],
-                    "status": "Yellow",
-                    "composition": cand["composition"],
-                    "processing": cand["processing"],
-                    "telemetry": telemetry_row,
-                    "decision": None,
-                    "reason": (
-                        f"SEM scan CV confidence {telemetry_row['sem_cv_confidence']:.2f} "
-                        "(sensor ambiguity, not composition novelty)"
-                    ),
-                    "options": ["approve", "rescan", "kill"],
-                }
+        record["telemetry"] = telemetry_row
+        record["status"] = status
+        if record["decision"] is None:
+            record["decision"] = {"Green": "auto_advance", "Red": "early_kill"}.get(status, "scan_flagged")
+        if status != "Green":
+            sem = telemetry_row["sem_cv_confidence"]
+            record["follow_up"] = (
+                f"Post-scan {status}: SEM confidence {sem:.2f}. Flagged for follow-up; it does not block the run."
             )
-            record["decision"] = reply["decision"]
-            record["intuition_note"] = reply.get("note", "")
         triage.append(record)
     return {"triage": triage}
 

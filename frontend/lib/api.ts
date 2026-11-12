@@ -23,14 +23,26 @@ export type Telemetry = {
   crack_detected: boolean;
 };
 
+// Mock pre-synthesis risk signals for a proposed recipe (no sample exists yet).
+export type Risk = {
+  source: string;
+  baseline_run: string;
+  predicted_ductility_margin: number;
+  ductility_label: string;
+  furnace_blast_radius: string;
+  phase_stability: number;
+  restricted_elements: string[];
+};
+
 export type Pending = {
+  stage: string;
   sample_id: string;
   candidate_id: string;
   status: string;
   composition: string;
   processing: string;
   reason: string;
-  telemetry: Telemetry;
+  risk: Risk;
   options: string[];
 };
 
@@ -40,7 +52,9 @@ export type TriageRecord = {
   composition: string;
   processing: string;
   status: string;
-  telemetry: Telemetry;
+  telemetry: Telemetry | null; // null when the recipe was held and never synthesized
+  risk?: Risk;
+  follow_up?: string | null;
   decision: string | null;
   intuition_note: string;
 };

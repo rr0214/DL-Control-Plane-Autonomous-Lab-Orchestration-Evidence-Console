@@ -21,7 +21,7 @@ class PlanRequest(BaseModel):
 
 
 class ReviewRequest(BaseModel):
-    decision: Literal["approve", "rescan", "kill"]
+    decision: Literal["approve", "revise", "reject"]
     note: str = Field(default="", max_length=280)
 
 

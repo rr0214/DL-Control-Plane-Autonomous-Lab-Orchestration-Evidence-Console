@@ -79,10 +79,10 @@ def test_review_enforces_rbac_then_resumes(client):
 
 
 def test_review_unknown_or_already_decided_sample(client):
-    assert client.post("/api/samples/S-NOPE/review", json={"decision": "kill"}).status_code == 404
+    assert client.post("/api/samples/S-NOPE/review", json={"decision": "reject"}).status_code == 404
 
     client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-3"})
-    client.post("/api/samples/S-C-3/review", json={"decision": "kill", "note": ""})
+    client.post("/api/samples/S-C-3/review", json={"decision": "reject", "note": ""})
     again = client.post("/api/samples/S-C-3/review", json={"decision": "approve", "note": ""})
     assert again.status_code == 409
 
@@ -117,3 +117,34 @@ def test_reset_clears_campaign_lineage_but_keeps_seed_runs(client, tmp_path, mon
     # A fresh plan works after reset and pauses on the Yellow control again.
     again = client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-6"})
     assert again.json()["status"] == "paused"
+
+
+def test_operator_may_revise_but_not_approve_or_reject(client):
+    client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-rbac"})
+    op = {"X-Role": "Operator"}
+    assert client.post("/api/samples/S-C-3/review", json={"decision": "approve"}, headers=op).status_code == 403
+    assert client.post("/api/samples/S-C-3/review", json={"decision": "reject"}, headers=op).status_code == 403
+    assert client.post("/api/samples/S-C-3/review", json={"decision": "revise"}, headers=op).status_code == 200
+
+
+def test_old_decision_names_are_no_longer_accepted(client):
+    client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-old"})
+    for old in ("kill", "rescan"):
+        assert client.post("/api/samples/S-C-3/review", json={"decision": old}).status_code == 422
+
+
+def test_plan_response_is_paused_before_synthesis_with_risk_signals(client):
+    body = client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-pre"}).json()
+    assert body["status"] == "paused" and body["pending"]["stage"] == "pre_synthesis"
+    assert body["pending"]["risk"]["furnace_blast_radius"] == "high"
+    assert "telemetry" not in body["pending"] and body["triage"] == []
+
+
+def test_rejected_recipe_is_stored_as_held_with_a_no_instrument_receipt(client):
+    client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-held"})
+    done = client.post("/api/samples/S-C-3/review", json={"decision": "reject", "note": "too risky"}).json()
+    assert done["triage"][-1]["status"] == "Held" and done["triage"][-1]["telemetry"] is None
+    sample = [s for s in client.get("/api/campaigns/CAMP-014").json()["live_samples"] if s["sample_id"] == "S-C-3"][0]
+    assert sample["decision"] == "reject" and sample["status"] == "Held"
+    assert sample["receipt"]["instrument"] == "none (held before synthesis)"
+    assert len(sample["receipt"]["content_sha256"]) == 64
