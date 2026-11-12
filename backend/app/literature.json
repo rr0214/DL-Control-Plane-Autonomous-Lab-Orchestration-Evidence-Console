@@ -1,0 +1,62 @@
+[
+  {
+    "id": "senkov-2014-al-rhea",
+    "title": "Microstructure and Properties of Aluminum-Containing Refractory High-Entropy Alloys",
+    "authors": "O. N. Senkov, C. Woodward, D. B. Miracle",
+    "year": 2014,
+    "venue": "JOM 66(10), 2030-2042",
+    "doi": "10.1007/s11837-014-1066-0",
+    "topics": ["microstructure", "mechanical properties"],
+    "systems": ["Al"],
+    "note": "Aluminum-containing refractory alloys. Relevant to the Al additions in the CAMP-014 Nb-Ti-Cr-Al space.",
+    "verified_from": "Title, authors, journal, volume, pages, and DOI read from the paper text"
+  },
+  {
+    "id": "gorsse-tancret-2018-calphad",
+    "title": "Current and emerging practices of CALPHAD toward the development of high entropy alloys and complex concentrated alloys",
+    "authors": "Stéphane Gorsse, Franck Tancret",
+    "year": 2018,
+    "venue": "Journal of Materials Research 33(19)",
+    "doi": "10.1557/jmr.2018.152",
+    "topics": ["phase stability", "CALPHAD"],
+    "systems": [],
+    "note": "Review of how CALPHAD thermodynamic databases screen high entropy and complex concentrated alloys for phase stability.",
+    "verified_from": "Title, authors, journal, volume, and DOI read from the paper page"
+  },
+  {
+    "id": "kozlik-2024-calphad-vs-experiment",
+    "title": "Phase Composition of AlTiNbMoV, AlTiNbTaZr and AlTiNbMoCr Refractory Complex Concentrated Alloys: A Correlation of Predictions and Experiment",
+    "authors": "Jiří Kozlík, František Lukáč, Mariano Casas Luna, Kristián Šalata, Josef Stráský, Jozef Veselý, Eliška Jača, Tomáš Chráska",
+    "year": 2024,
+    "venue": "arXiv:2409.20119",
+    "doi": "10.1007/s11661-024-07595-2",
+    "topics": ["phase stability", "CALPHAD"],
+    "systems": ["Al", "Ti", "Nb", "Mo", "Cr", "V", "Ta", "Zr"],
+    "note": "Compares CALPHAD (TCHEA4) equilibrium predictions with measured phase compositions for three refractory complex concentrated alloys.",
+    "verified_from": "Title, authors, and DOI as printed in the paper's PDF. Confirm on the publisher page before external citation."
+  },
+  {
+    "id": "lin-2024-nbti-oxidation",
+    "title": "High-Temperature Oxidation of NbTi-Bearing Refractory Medium- and High-Entropy Alloys",
+    "authors": "Wei-Chih Lin, Yi-Wen Lien, Louis Etienne Moreau, Hideyuki Murakami, Kai-Chi Lo, Stéphane Gorsse, An-Chou Yeh",
+    "year": 2024,
+    "venue": "Materials 17(18), 4579",
+    "doi": "10.3390/ma17184579",
+    "topics": ["oxidation"],
+    "systems": ["Nb", "Ti"],
+    "note": "High-temperature oxidation of NbTi-bearing refractory alloys. Directly relevant to the CAMP-014 oxidation goal.",
+    "verified_from": "Title, authors, journal, volume, issue, article number, and DOI read from the paper page"
+  },
+  {
+    "id": "zhang-2022-calphad-ml",
+    "title": "Machine learning prediction of the mechanical properties of refractory multicomponent alloys based on a dataset of phase and first principles simulation",
+    "authors": "Congyan Zhang, Xuhang Gu, Uttam Bhandari, Jialin Lei, Shengmin Guo, Mathieu Kourouma, Abdennaceur Karoui, Shizhong Yang",
+    "year": 2022,
+    "venue": "Frontiers in Metals and Alloys",
+    "doi": "10.3389/ftmal.2022.1036656",
+    "topics": ["phase stability", "mechanical properties"],
+    "systems": [],
+    "note": "Builds a dataset of 393 refractory alloys from CALPHAD phase diagrams and first-principles calculations, then trains ML models for mechanical properties.",
+    "verified_from": "Title, authors, journal, year, and DOI read from the paper page"
+  }
+]

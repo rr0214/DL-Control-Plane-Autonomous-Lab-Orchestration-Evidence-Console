@@ -131,6 +131,21 @@ def save_sample(conn: sqlite3.Connection, thread_id: str, campaign_id: str, reco
     conn.commit()
 
 
+def clear_campaign_lineage(conn: sqlite3.Connection, campaign_id: str) -> list[str]:
+    """Delete plans and samples for one campaign. Returns the thread IDs that were removed.
+
+    Seed campaigns and runs are not touched.
+    """
+    thread_ids = [
+        r["thread_id"]
+        for r in conn.execute("SELECT thread_id FROM plans WHERE campaign_id = ?", (campaign_id,)).fetchall()
+    ]
+    conn.execute("DELETE FROM samples WHERE campaign_id = ?", (campaign_id,))
+    conn.execute("DELETE FROM plans WHERE campaign_id = ?", (campaign_id,))
+    conn.commit()
+    return thread_ids
+
+
 def get_sample(conn: sqlite3.Connection, sample_id: str) -> dict | None:
     row = conn.execute("SELECT * FROM samples WHERE sample_id = ?", (sample_id,)).fetchone()
     return dict(row) if row else None

@@ -56,6 +56,26 @@ export type Span = {
 
 export type Trace = { trace_id: string; simulated: boolean; spans: Span[] };
 
+export type ToolCall = {
+  tool: string;
+  transport: "fastmcp" | "direct";
+  args: Record<string, unknown>;
+};
+
+export type Literature = {
+  id: string;
+  title: string;
+  authors: string;
+  year: number;
+  venue: string;
+  doi: string;
+  doi_url: string;
+  topics: string[];
+  systems: string[];
+  note: string;
+  verified_from: string;
+};
+
 export type PlanResult = {
   status: "paused" | "complete";
   thread_id: string;
@@ -66,6 +86,9 @@ export type PlanResult = {
   verdicts: Verdict[];
   approved: Candidate[];
   triage: TriageRecord[];
+  tool_calls: ToolCall[];
+  literature: Literature[];
+  mcp_mode: string;
   trace: Trace;
 };
 
@@ -102,4 +125,6 @@ export type CampaignView = {
   live_samples: SampleRecord[];
   plans: { thread_id: string; status: string; llm_mode: string | null; created_at: string }[];
   seed_trace: Trace;
+  literature: Literature[];
+  mcp_mode: string;
 };

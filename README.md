@@ -27,6 +27,7 @@ In both modes:
 
 - **Ratios come only from `bayesian_optimizer`.** The model never writes stoichiometry.
 - **Two boundary probes are always appended:** a candidate containing the restricted element Hf, and an exact repeat of Run-088 (Nb50-Ti20-Cr15-Al15, Arc-Melt). The Policy Kernel blocks both, so the gate is always visible.
+- **One demo Yellow control is always appended:** the same composition as Run-088 on a new route (Additive/Anneal). The gate allows it, and its SEM scan is ambiguous, so the scientist's review card always appears. This is a demo device that guarantees the human-in-the-loop step is visible, not a model choice.
 
 ## Architecture
 
@@ -82,6 +83,8 @@ backend/
     policy_kernel.py    Deterministic gate
     optimizer.py        bayesian_optimizer tool (mock surrogate)
     workcell.py         Simulated telemetry and Green/Yellow/Red classifier
+    mcp_server.py       FastMCP tool contract and in-memory ToolGateway
+    literature.json     Curated CALPHAD and refractory-alloy references (DOIs checked)
     seed_camp014.py     RBAC, evidence receipts, span trees
     db.py               SQLite schema, seed data, lineage tables
   tests/                pytest suite (policy, graph pause/resume, API, proposer)
@@ -99,7 +102,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-Current suite: 17 tests covering policy rules, the pause and resume cycle, RBAC enforcement, duplicate-thread protection, and probe behavior in both modes.
+Current suite: 27 tests covering policy rules, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, and probe behavior in both modes.
 
 ## Configuration
 
@@ -116,10 +119,22 @@ Copy `.env.example` to `.env`:
 
 - **Simulated data.** Telemetry, span timings, and eval numbers are demo values. The Evals tab labels its numbers as placeholders.
 - **Optimizer is a stand-in.** `bayesian_optimizer` returns a fixed table. A real version would fit a surrogate model (such as a Gaussian process) on measured runs.
-- **MCP is not implemented.** The architecture view marks the MCP tool gateway as planned.
 - **OpenAI is not wired.** Only Anthropic is supported in real mode.
-- **Real mode is not guaranteed to produce an approved sample.** The boundary probes are always there, but the model's novel candidate may not match the Yellow telemetry demo. The mock plan always includes one.
 - **Rescan does not re-queue a sample.** It is recorded as a decision, and the workflow moves on.
+- **Literature is a curated list.** Six papers were checked against their text. Search is local, not live.
+- **Reset Demo clears only CAMP-014.** Plans, samples, and checkpoints for that campaign are removed. Seed runs stay.
+
+## MCP tool contract
+
+Three tools, defined once in `backend/app/mcp_server.py` with FastMCP:
+
+| Tool | What it does |
+|---|---|
+| `propose_alloy_ratios` | Returns numeric compositions (percent, summing to 100) from the optimizer for an element set and route |
+| `check_negative_runs` | Looks up prior runs with the same composition and route, including failed ones (for example, Run-088) |
+| `search_calphad_literature` | Returns phase-stability and CALPHAD references with DOIs |
+
+The graph calls these through an in-memory MCP session, so the protocol is real but no subprocess is needed. If that session fails, the same functions run directly, and the trace records which transport was used. Set `SDL_MCP_MODE=direct` to skip FastMCP.
 
 ## Design notes
 

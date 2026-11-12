@@ -36,7 +36,7 @@ def bayesian_optimizer(elements: list[str], processing: str, n: int = 3) -> dict
 
 
 TOOL_SCHEMA = {
-    "name": "bayesian_optimizer",
+    "name": "propose_alloy_ratios",
     "description": (
         "Returns numeric composition ratios (percent of each element, summing to 100) for an "
         "element set and processing route. This is the only permitted source of stoichiometry."

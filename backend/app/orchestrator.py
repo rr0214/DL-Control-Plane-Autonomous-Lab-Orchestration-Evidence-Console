@@ -49,4 +49,19 @@ class CampaignOrchestrator:
             "verdicts": values.get("verdicts", []),
             "approved": values.get("approved", []),
             "triage": values.get("triage", []),
+            "literature": values.get("literature", []),
+            "tool_calls": values.get("tool_calls", []),
         }
+
+    def forget_threads(self, thread_ids: list[str]) -> None:
+        """Delete LangGraph checkpoints for the given threads only. Other data is untouched."""
+        if not thread_ids:
+            return
+        marks = ",".join("?" for _ in thread_ids)
+        with self._lock:
+            for table in ("writes", "checkpoints"):
+                try:
+                    self._conn.execute(f"DELETE FROM {table} WHERE thread_id IN ({marks})", thread_ids)
+                except sqlite3.OperationalError:  # table not created yet
+                    pass
+            self._conn.commit()

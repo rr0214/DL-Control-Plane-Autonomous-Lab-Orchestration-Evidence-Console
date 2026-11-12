@@ -42,5 +42,5 @@ def test_every_ratio_comes_from_optimizer_and_sums_to_100(orch):
     done = orch.review("thread-3", "kill")
     assert len(done["candidates"]) == 3
     for c in done["candidates"]:
-        assert c["source"] == "bayesian_optimizer"
+        assert c["source"] == "propose_alloy_ratios"
         assert sum(parse(c["composition"]).values()) == 100

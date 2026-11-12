@@ -5,6 +5,12 @@ import { API, CampaignView, PlanResult, SampleRecord, Span, TriageRecord, Verdic
 
 const ROLES = ["Scientist (PI)", "Operator"];
 
+const ORIGIN_LABEL: Record<string, string> = {
+  llm: "Model proposal",
+  boundary_probe: "Boundary probe (policy check)",
+  yellow_control: "Demo Yellow control (sensor ambiguity)",
+};
+
 function Pill({ tone, children }: { tone: "green" | "yellow" | "red" | "slate" | "blue"; children: React.ReactNode }) {
   const tones = {
     green: "bg-emerald-100 text-emerald-800 ring-emerald-300",
@@ -117,6 +123,26 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
         </div>
 
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Related literature</h2>
+          <ul className="mt-2 space-y-2">
+            {(plan?.literature ?? campaign?.literature ?? []).map((lit) => (
+              <li key={lit.id} className="text-xs">
+                <a href={lit.doi_url} target="_blank" rel="noreferrer" className="font-medium text-sky-700 hover:underline">
+                  {lit.title}
+                </a>
+                <div className="text-slate-500">
+                  {lit.authors} · {lit.year} · {lit.venue}
+                </div>
+                <div className="font-mono text-[11px] text-slate-400">doi:{lit.doi}</div>
+              </li>
+            ))}
+            {!(campaign?.literature?.length || plan?.literature?.length) && (
+              <li className="text-xs text-slate-500">Loading references...</li>
+            )}
+          </ul>
+        </div>
+
+        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Pre-flight gate</h2>
           <p className="mt-1 text-xs text-slate-500">
             Deterministic rules run before any sample is made. No model can override them.
@@ -154,11 +180,30 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                       <span className="text-slate-500"> · {v.reason}</span>
                     </div>
                   )}
-                  {c.origin && <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-400">{c.origin}</div>}
+                  {c.origin && (
+                    <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-400">
+                      {ORIGIN_LABEL[c.origin] ?? c.origin}
+                    </div>
+                  )}
                 </li>
               );
             })}
           </ul>
+          {plan?.tool_calls?.length ? (
+            <div className="mt-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tool calls this run</h3>
+              <ul className="mt-1 space-y-1 font-mono text-[11px] text-slate-600">
+                {plan.tool_calls.map((tc, i) => (
+                  <li key={`${tc.tool}-${i}`} className="flex items-center justify-between gap-2">
+                    <span>{tc.tool}</span>
+                    <Pill tone={tc.transport === "fastmcp" ? "blue" : "slate"}>
+                      {tc.transport === "fastmcp" ? "FastMCP" : "direct"}
+                    </Pill>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {plan?.notes?.length ? (
             <ul className="mt-3 list-disc pl-4 text-xs text-slate-500">
               {plan.notes.map((n) => (

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { API } from "@/lib/api";
 
 type Component = { id: string; name: string; plane: "core" | "pluggable"; detail: string; status: "built" | "planned" };
 
@@ -23,8 +24,9 @@ const COMPONENTS: Component[] = [
     id: "mcp",
     name: "MCP tool gateway",
     plane: "core",
-    status: "planned",
-    detail: "Planned: the single, audited door for agents to call instruments and tools. Not in this build yet.",
+    status: "built",
+    detail:
+      "Standard tool contract: propose_alloy_ratios, check_negative_runs, and search_calphad_literature. The graph calls them through an in-memory FastMCP session. If that session fails, it calls the same functions directly and records which path ran.",
   },
   {
     id: "policy",
@@ -57,34 +59,48 @@ const COMPONENTS: Component[] = [
 ];
 
 export default function ArchitectureTab() {
-  const [selected, setSelected] = useState<string>("policy");
-  const active = COMPONENTS.find((c) => c.id === selected) ?? COMPONENTS[0];
+  const [selected, setSelected] = useState<string>("mcp");
+  const [mcpMode, setMcpMode] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetch(`${API}/api/health`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((b: { mcp_mode?: string }) => setMcpMode(b.mcp_mode ?? null))
+      .catch(() => setMcpMode(null));
+  }, []);
+
+  const active = COMPONENTS.find((c) => c.id === selected) ?? COMPONENTS[0];
   const core = COMPONENTS.filter((c) => c.plane === "core");
   const pluggable = COMPONENTS.filter((c) => c.plane === "pluggable");
 
-  const renderBox = (c: Component) => (
-    <button
-      key={c.id}
-      onClick={() => setSelected(c.id)}
-      className={`w-full rounded-lg border p-3 text-left transition ${
-        selected === c.id
-          ? "border-slate-900 bg-white shadow-md"
-          : "border-slate-200 bg-white/70 hover:border-slate-400"
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-slate-900">{c.name}</span>
-        <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-            c.status === "built" ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
-          }`}
-        >
-          {c.status}
-        </span>
-      </div>
-    </button>
-  );
+  function badgeFor(c: Component): { text: string; tone: string } {
+    if (c.id === "mcp") {
+      if (mcpMode === "fastmcp") return { text: "Active (FastMCP)", tone: "bg-emerald-100 text-emerald-800" };
+      if (mcpMode === "direct") return { text: "Active (direct fallback)", tone: "bg-amber-100 text-amber-900" };
+      return { text: "Checking...", tone: "bg-slate-200 text-slate-600" };
+    }
+    return c.status === "built"
+      ? { text: "built", tone: "bg-emerald-100 text-emerald-800" }
+      : { text: "planned", tone: "bg-slate-200 text-slate-600" };
+  }
+
+  const renderBox = (c: Component) => {
+    const badge = badgeFor(c);
+    return (
+      <button
+        key={c.id}
+        onClick={() => setSelected(c.id)}
+        className={`w-full rounded-lg border p-3 text-left transition ${
+          selected === c.id ? "border-slate-900 bg-white shadow-md" : "border-slate-200 bg-white/70 hover:border-slate-400"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-semibold text-slate-900">{c.name}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.tone}`}>{badge.text}</span>
+        </div>
+      </button>
+    );
+  };
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">
@@ -107,9 +123,7 @@ export default function ArchitectureTab() {
           <span className="text-xs text-slate-500">{active.plane === "core" ? "Core harness" : "Pluggable"}</span>
         </div>
         <p className="mt-3 text-sm text-slate-700">{active.detail}</p>
-        <p className="mt-4 text-xs text-slate-500">
-          Click any component to see what it does and whether it is built yet.
-        </p>
+        <p className="mt-4 text-xs text-slate-500">Click any component to see what it does and whether it is built yet.</p>
       </aside>
     </div>
   );

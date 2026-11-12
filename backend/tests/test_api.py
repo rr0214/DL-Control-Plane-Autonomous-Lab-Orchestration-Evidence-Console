@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app import db
 from app.api import create_app
 from app.orchestrator import CampaignOrchestrator
 
@@ -13,7 +14,13 @@ def client(tmp_path, monkeypatch):
     return TestClient(create_app(orch))
 
 
-def test_get_campaign_returns_rbac_receipts_and_trace(client):
+def test_health_reports_mcp_mode(client):
+    body = client.get("/api/health").json()
+    assert body["status"] == "ok"
+    assert body["mcp_mode"] in {"fastmcp", "direct"}
+
+
+def test_get_campaign_returns_rbac_receipts_literature_and_trace(client):
     r = client.get("/api/campaigns/CAMP-014")
     assert r.status_code == 200
     body = r.json()
@@ -21,6 +28,7 @@ def test_get_campaign_returns_rbac_receipts_and_trace(client):
     assert body["campaign"]["export_control"] == "ITAR"
     assert len(body["rbac"]["roles"]) == 4
     assert all(len(s["receipt"]["content_sha256"]) == 64 for s in body["seed_samples"])
+    assert body["literature"] and all(lit["doi_url"].startswith("https://doi.org/") for lit in body["literature"])
     names = {span["name"] for span in body["seed_trace"]["spans"]}
     assert {"campaign.plan", "policy_kernel", "triage_and_hitl"} <= names
 
@@ -29,13 +37,16 @@ def test_unknown_campaign_returns_404(client):
     assert client.get("/api/campaigns/CAMP-999").status_code == 404
 
 
-def test_plan_pauses_persists_and_shows_in_get(client):
+def test_plan_pauses_persists_and_traces_mcp_calls(client):
     r = client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-1"})
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "paused"
     assert body["pending"]["sample_id"] == "S-C-3"
     assert body["trace"]["simulated"] is True
+    span_names = {s["name"] for s in body["trace"]["spans"]}
+    assert "mcp.propose_alloy_ratios" in span_names
+    assert "mcp.check_negative_runs" in span_names
 
     live = client.get("/api/campaigns/CAMP-014").json()["live_samples"]
     pending = [s for s in live if s["sample_id"] == "S-C-3"]
@@ -80,3 +91,29 @@ def test_duplicate_thread_id_rejected(client):
     client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-4"})
     r = client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-4"})
     assert r.status_code == 409
+
+
+def test_reset_clears_campaign_lineage_but_keeps_seed_runs(client, tmp_path, monkeypatch):
+    client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-5"})
+    assert client.get("/api/campaigns/CAMP-014").json()["live_samples"]
+
+    denied = client.post("/api/demo/reset", headers={"X-Role": "Operator"})
+    assert denied.status_code == 403
+
+    r = client.post("/api/demo/reset", headers={"X-Role": "Scientist (PI)"})
+    assert r.status_code == 200
+    assert r.json()["threads_cleared"] == 1
+
+    body = client.get("/api/campaigns/CAMP-014").json()
+    assert body["live_samples"] == []
+    assert body["plans"] == []
+
+    conn = db.connect()
+    try:
+        assert {run["run_id"] for run in db.get_runs(conn, "CAMP-014")} == {"Run-071", "Run-088"}
+    finally:
+        conn.close()
+
+    # A fresh plan works after reset and pauses on the Yellow control again.
+    again = client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-6"})
+    assert again.json()["status"] == "paused"

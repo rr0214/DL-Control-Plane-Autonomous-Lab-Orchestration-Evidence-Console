@@ -1,4 +1,8 @@
-"""The CampaignOrchestrator LangGraph: retrieve -> propose -> policy gate -> triage (HITL)."""
+"""The CampaignOrchestrator LangGraph: retrieve -> propose -> policy gate -> triage (HITL).
+
+Tool use goes through the MCP gateway (mcp_server.gateway), so every tool call is
+recorded with its transport (fastmcp or direct) in state.tool_calls.
+"""
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -8,6 +12,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from . import db, policy_kernel, proposer, workcell
+from .mcp_server import gateway
+
+CAMPAIGN_ELEMENTS = ["Nb", "Ti", "Cr", "Al"]
 
 
 class CampaignState(TypedDict, total=False):
@@ -15,8 +22,10 @@ class CampaignState(TypedDict, total=False):
     goal: str
     scope: dict[str, Any]
     history: list[dict[str, Any]]
+    literature: list[dict[str, Any]]
     llm_mode: str
     notes: list[str]
+    tool_calls: list[dict[str, Any]]
     candidates: list[dict[str, Any]]
     verdicts: list[dict[str, Any]]
     approved: list[dict[str, Any]]
@@ -30,23 +39,55 @@ def retrieve_context(state: CampaignState) -> dict[str, Any]:
         history = db.get_runs(conn, state["campaign_id"])
     finally:
         conn.close()
+    lit, transport = gateway.call(
+        "search_calphad_literature", {"elements": CAMPAIGN_ELEMENTS, "topic": None, "limit": 3}
+    )
+    call = {"tool": "search_calphad_literature", "transport": transport, "args": {"elements": CAMPAIGN_ELEMENTS}}
     return {
         "goal": campaign["goal"],
         "scope": {"tenant": campaign["tenant"], "export_control": campaign["export_control"]},
         "history": history,
-        "notes": [f"Loaded {len(history)} prior runs for {campaign['campaign_id']}"],
+        "literature": lit["results"],
+        "tool_calls": [*state.get("tool_calls", []), call],
+        "notes": [f"Loaded {len(history)} prior runs and {len(lit['results'])} literature references"],
     }
 
 
 def propose_candidates(state: CampaignState) -> dict[str, Any]:
-    candidates, mode, note = proposer.propose(state["goal"], state["history"])
-    return {"candidates": candidates, "llm_mode": mode, "notes": [*state.get("notes", []), note]}
+    candidates, mode, note, calls = proposer.propose(state["goal"], state["history"], gateway.call)
+    return {
+        "candidates": candidates,
+        "llm_mode": mode,
+        "notes": [*state.get("notes", []), note],
+        "tool_calls": [*state.get("tool_calls", []), *calls],
+    }
 
 
 def policy_kernel_node(state: CampaignState) -> dict[str, Any]:
-    verdicts = policy_kernel.evaluate(state["candidates"], state["history"])
-    approved = [c for c, v in zip(state["candidates"], verdicts) if v.allowed]
-    return {"verdicts": [asdict(v) for v in verdicts], "approved": approved}
+    verdicts, approved, calls = [], [], []
+    for cand in state["candidates"]:
+        neg, transport = gateway.call(
+            "check_negative_runs", {"composition": cand["composition"], "processing": cand["processing"]}
+        )
+        calls.append({"tool": "check_negative_runs", "transport": transport, "args": {"composition": cand["composition"]}})
+        prior = [
+            {
+                "run_id": m["run_id"],
+                "composition": cand["composition"],
+                "processing": cand["processing"],
+                "outcome": m["outcome"],
+            }
+            for m in neg["exact_matches"]
+        ]
+        verdict = policy_kernel.check(cand, prior)
+        verdicts.append(asdict(verdict))
+        if verdict.allowed:
+            approved.append(cand)
+    return {
+        "verdicts": verdicts,
+        "approved": approved,
+        "tool_calls": [*state.get("tool_calls", []), *calls],
+    }
 
 
 def triage_and_hitl(state: CampaignState) -> dict[str, Any]:

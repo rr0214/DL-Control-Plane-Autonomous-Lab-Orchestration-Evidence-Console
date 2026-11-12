@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from . import db, seed_camp014
+from .mcp_server import gateway
 from .orchestrator import CampaignOrchestrator
 
 KNOWN_CAMPAIGNS = {"CAMP-014"}
@@ -29,17 +30,23 @@ def _persist(conn, thread_id: str, campaign_id: str, out: dict) -> None:
     for record in out["triage"]:
         db.save_sample(conn, thread_id, campaign_id, record)
     if out["status"] == "paused" and out["pending"]:
-        pending = dict(out["pending"], status="Yellow", decision=None)
-        db.save_sample(conn, thread_id, campaign_id, pending)
+        db.save_sample(conn, thread_id, campaign_id, out["pending"])
 
 
 def _with_trace(thread_id: str, out: dict) -> dict:
-    trace = seed_camp014.build_trace(thread_id, out["llm_mode"] or "mock", out["candidates"], out["verdicts"], out["triage"])
-    return dict(out, trace=trace)
+    trace = seed_camp014.build_trace(
+        thread_id,
+        out["llm_mode"] or "mock",
+        out["candidates"],
+        out["verdicts"],
+        out["triage"],
+        out.get("tool_calls", []),
+    )
+    return dict(out, trace=trace, mcp_mode=gateway.mode)
 
 
 def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
-    app = FastAPI(title="SDL Control Plane API", version="0.2.0")
+    app = FastAPI(title="SDL Control Plane API", version="0.3.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -56,7 +63,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
 
     @app.get("/api/health")
     def health() -> dict:
-        return {"status": "ok"}
+        return {"status": "ok", "mcp_mode": gateway.mode}
 
     @app.get("/api/campaigns/{campaign_id}")
     def get_campaign(campaign_id: str) -> dict:
@@ -72,6 +79,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
             plans = db.list_plans(conn, campaign_id)
         finally:
             conn.close()
+        literature, _ = gateway.call("search_calphad_literature", {"elements": ["Nb", "Ti", "Cr", "Al"], "limit": 3})
         return {
             "campaign": campaign,
             "rbac": seed_camp014.RBAC,
@@ -79,6 +87,8 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
             "live_samples": live,
             "plans": plans,
             "seed_trace": seed_camp014.SEED_TRACE,
+            "literature": literature["results"],
+            "mcp_mode": gateway.mode,
         }
 
     @app.post("/api/campaigns/plan")
@@ -123,6 +133,25 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
         finally:
             conn.close()
         return _with_trace(sample["thread_id"], out)
+
+    @app.post("/api/demo/reset")
+    def reset_demo(
+        campaign_id: str = "CAMP-014",
+        x_role: str = Header(default="Scientist (PI)"),
+    ) -> dict:
+        """Clears plans, samples, and checkpoints for one campaign. Seed runs and campaigns are kept."""
+        if campaign_id not in KNOWN_CAMPAIGNS:
+            raise HTTPException(404, f"Unknown campaign {campaign_id}")
+        role = next((r for r in seed_camp014.RBAC["roles"] if r["role"] == x_role), None)
+        if role is None or "approve" not in role["permissions"]:
+            raise HTTPException(403, f"Role '{x_role}' may not reset the demo")
+        conn = db.connect()
+        try:
+            thread_ids = db.clear_campaign_lineage(conn, campaign_id)
+        finally:
+            conn.close()
+        orch().forget_threads(thread_ids)
+        return {"status": "reset", "campaign_id": campaign_id, "threads_cleared": len(thread_ids)}
 
     return app
 

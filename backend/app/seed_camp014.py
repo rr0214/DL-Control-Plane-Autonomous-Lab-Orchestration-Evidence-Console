@@ -63,7 +63,14 @@ def _span_id(trace_id: str, name: str, index: int = 0) -> str:
     return hashlib.sha256(f"{trace_id}:{name}:{index}".encode()).hexdigest()[:16]
 
 
-def build_trace(thread_id: str, llm_mode: str, candidates: list[dict], verdicts: list[dict], triage: list[dict]) -> dict:
+def build_trace(
+    thread_id: str,
+    llm_mode: str,
+    candidates: list[dict],
+    verdicts: list[dict],
+    triage: list[dict],
+    tool_calls: list[dict] | None = None,
+) -> dict:
     """OpenTelemetry-shaped span tree for one plan run. Timings are simulated."""
     trace_id = hashlib.sha256(thread_id.encode()).hexdigest()[:32]
     spans: list[dict] = []
@@ -115,6 +122,15 @@ def build_trace(thread_id: str, llm_mode: str, candidates: list[dict], verdicts:
                 "rule": v["rule"] or "none",
             },
             index=i,
+        )
+
+    for i, call in enumerate(tool_calls or [], 1):
+        add(
+            f"mcp.{call['tool']}",
+            root,
+            1.5,
+            {"mcp.transport": call["transport"], "tool.name": call["tool"], "simulated": True},
+            index=100 + i,
         )
 
     triage_span = add("triage_and_hitl", root, 0.0, {"samples": len(triage)})
