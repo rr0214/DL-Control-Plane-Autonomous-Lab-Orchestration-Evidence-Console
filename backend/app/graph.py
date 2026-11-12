@@ -73,9 +73,12 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
             reply = interrupt(
                 {
                     "sample_id": record["sample_id"],
+                    "candidate_id": cand["candidate_id"],
                     "status": "Yellow",
                     "composition": cand["composition"],
                     "processing": cand["processing"],
+                    "telemetry": telemetry,
+                    "decision": None,
                     "reason": (
                         f"SEM scan CV confidence {telemetry['sem_cv_confidence']:.2f} "
                         "(sensor ambiguity, not composition novelty)"

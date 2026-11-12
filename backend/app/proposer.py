@@ -1,40 +1,46 @@
 """Candidate proposal. Real LLM tool-calling when ANTHROPIC_API_KEY is set, mock plan otherwise.
 
-In both modes, every composition ratio comes from bayesian_optimizer. The model
-chooses element sets and processing routes; it never writes stoichiometry.
+In both modes:
+- every composition ratio comes from bayesian_optimizer (the model never writes stoichiometry)
+- two boundary probes are always appended, so the Policy Kernel visibly blocks them:
+    1. Hf candidate                      -> RESTRICTED_ELEMENT
+    2. Run-088 exact repeat (Arc-Melt)   -> DUPLICATE_CONDITION
 """
 from __future__ import annotations
 
 import json
 
+from .chemistry import normalize_composition, normalize_processing
 from .config import anthropic_key, anthropic_model
-from .optimizer import ALLOWED_PROCESSING, TOOL_SCHEMA, bayesian_optimizer
+from .optimizer import TOOL_SCHEMA, bayesian_optimizer
 
-MAX_CANDIDATES = 3
+MAX_LLM_CANDIDATES = 2
 
-# Used when no key is set. Each route hits one policy outcome so the gate is visible in the UI.
-MOCK_PLAN = [
-    (["Nb", "Ti", "Cr", "Al"], "Arc-Melt"),         # repeats Run-088 exactly -> DUPLICATE_CONDITION
-    (["Nb", "Ti", "Hf", "Al"], "Additive/Anneal"),  # contains Hf -> RESTRICTED_ELEMENT
-    (["Nb", "Ti", "Cr", "Al"], "Additive/Anneal"),  # same composition, new route -> allowed
+BOUNDARY_PROBES = [
+    (["Nb", "Ti", "Hf", "Al"], "Additive/Anneal"),  # restricted element
+    (["Nb", "Ti", "Cr", "Al"], "Arc-Melt"),         # exact Run-088 composition + processing
 ]
+
+# Same composition as the Run-088 probe, different processing route: the gate should allow it.
+ALLOWED_CONTROL = (["Nb", "Ti", "Cr", "Al"], "Additive/Anneal")
 
 SYSTEM_PROMPT = (
     "You are the campaign planner for an autonomous materials lab. You never write "
     "stoichiometry yourself. To propose a composition you call the bayesian_optimizer tool "
     "with an element set and a processing route, and you may only use the ratios it returns. "
-    "Make three tool calls in total. One call must include the restricted element Hf. "
-    "One call must repeat a prior run's composition with its processing route, so the "
-    "policy gate can be checked. Keep any text reply to one sentence."
+    "Make two tool calls in total. Explore new compositions: do not use the restricted element Hf "
+    "and do not repeat a prior run. The policy team adds its own boundary checks separately, "
+    "so do not try to include them. Keep any text reply to one sentence."
 )
 
 
-def _rows(output: dict) -> list[dict]:
+def _rows(output: dict, origin: str) -> list[dict]:
     return [
         {
             "composition": c["composition"],
             "processing": output["processing"],
             "expected_improvement": c["expected_improvement"],
+            "origin": origin,
         }
         for c in output.get("candidates", [])
     ]
@@ -53,6 +59,13 @@ def _run_tool(name: str, args: dict) -> dict:
         return {"error": str(exc)}
 
 
+def _probe_rows() -> list[dict]:
+    rows: list[dict] = []
+    for elements, processing in BOUNDARY_PROBES:
+        rows.extend(_rows(bayesian_optimizer(elements, processing, n=1), origin="boundary_probe"))
+    return rows
+
+
 def _propose_anthropic(goal: str, history: list[dict], key: str) -> tuple[list[dict], int]:
     import anthropic
 
@@ -63,7 +76,7 @@ def _propose_anthropic(goal: str, history: list[dict], key: str) -> tuple[list[d
     messages = [
         {
             "role": "user",
-            "content": f"Campaign goal: {goal}\nPrior runs:\n{prior}\n\nPropose three candidate routes now.",
+            "content": f"Campaign goal: {goal}\nPrior runs:\n{prior}\n\nPropose two new candidate routes now.",
         }
     ]
     rows: list[dict] = []
@@ -84,31 +97,41 @@ def _propose_anthropic(goal: str, history: list[dict], key: str) -> tuple[list[d
         results = []
         for use in uses:
             output = _run_tool(use.name, use.input)
-            rows.extend(_rows(output))
+            rows.extend(_rows(output, origin="llm"))
             results.append({"type": "tool_result", "tool_use_id": use.id, "content": json.dumps(output)})
         messages.append({"role": "user", "content": results})
     return rows, turns
 
 
 def propose(goal: str, history: list[dict]) -> tuple[list[dict], str, str]:
-    """Returns (candidates, llm_mode, note)."""
+    """Returns (candidates, llm_mode, note). Probes are always included."""
+    probes = _probe_rows()
+    probe_keys = {
+        (normalize_composition(p["composition"]), normalize_processing(p["processing"])) for p in probes
+    }
+
     key = anthropic_key()
     if key:
         try:
-            rows, turns = _propose_anthropic(goal, history, key)
-            if rows:
+            llm_rows, turns = _propose_anthropic(goal, history, key)
+            kept: list[dict] = []
+            seen = set(probe_keys)
+            for row in llm_rows:
+                row_key = (normalize_composition(row["composition"]), normalize_processing(row["processing"]))
+                if row_key not in seen:  # skip anything the probes already cover
+                    seen.add(row_key)
+                    kept.append(row)
+            if kept:
                 note = (
                     f"Claude ({anthropic_model()}) made {turns} tool-calling turn(s); "
-                    "all ratios came from bayesian_optimizer"
+                    "all ratios came from bayesian_optimizer; boundary probes appended"
                 )
-                return _number(rows[:MAX_CANDIDATES]), "anthropic", note
-            fallback_note = "Claude made no optimizer calls; used mock plan"
+                return _number(kept[:MAX_LLM_CANDIDATES] + probes), "anthropic", note
+            fallback_note = "Claude made no usable optimizer calls; used mock plan"
         except Exception as exc:  # network, auth, or SDK errors fall back to the mock
             fallback_note = f"Anthropic call failed ({type(exc).__name__}); used mock plan"
     else:
         fallback_note = "No ANTHROPIC_API_KEY set; used deterministic mock orchestrator"
 
-    rows: list[dict] = []
-    for elements, processing in MOCK_PLAN:
-        rows.extend(_rows(bayesian_optimizer(elements, processing, n=1)))
-    return _number(rows[:MAX_CANDIDATES]), "mock", fallback_note
+    control = _rows(bayesian_optimizer(*ALLOWED_CONTROL, n=1), origin="mock_control")
+    return _number(probes + control), "mock", fallback_note
