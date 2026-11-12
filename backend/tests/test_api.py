@@ -148,3 +148,13 @@ def test_rejected_recipe_is_stored_as_held_with_a_no_instrument_receipt(client):
     assert sample["decision"] == "reject" and sample["status"] == "Held"
     assert sample["receipt"]["instrument"] == "none (held before synthesis)"
     assert len(sample["receipt"]["content_sha256"]) == 64
+
+
+def test_repeated_plan_without_reset_attaches_the_sample_to_the_newest_thread(client):
+    # Each plan reuses the sample id S-C-3. The review must resume the NEWEST plan, not the first one.
+    client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-first"})
+    client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-second"})
+    done = client.post("/api/samples/S-C-3/review", json={"decision": "approve", "note": ""}).json()
+    assert done["thread_id"] == "t-second"
+    plans = {p["thread_id"]: p["status"] for p in client.get("/api/campaigns/CAMP-014").json()["plans"]}
+    assert plans["t-second"] == "complete" and plans["t-first"] == "paused"

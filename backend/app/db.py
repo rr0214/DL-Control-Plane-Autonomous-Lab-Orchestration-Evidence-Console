@@ -111,7 +111,8 @@ def save_sample(conn: sqlite3.Connection, thread_id: str, campaign_id: str, reco
         "INSERT INTO samples (sample_id, thread_id, campaign_id, candidate_id, composition, processing, "
         "status, decision, intuition_note, telemetry_json, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-        "ON CONFLICT(sample_id) DO UPDATE SET status = excluded.status, decision = excluded.decision, "
+        "ON CONFLICT(sample_id) DO UPDATE SET thread_id = excluded.thread_id, status = excluded.status, "
+        "decision = excluded.decision, "
         "intuition_note = excluded.intuition_note, telemetry_json = excluded.telemetry_json, "
         "updated_at = excluded.updated_at",
         (
