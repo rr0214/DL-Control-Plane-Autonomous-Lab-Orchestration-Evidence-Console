@@ -33,6 +33,9 @@ function statusTone(status: string): "green" | "yellow" | "red" | "slate" {
   return "slate";
 }
 
+// Display only: "C-1" is shown as "Candidate 1". The underlying candidate_id is never changed.
+const candidateLabel = (id: string) => id.replace(/^C-(\d+)$/, "Candidate $1");
+
 function StepHeader({ n, title, emphasis = false }: { n: number; title: string; emphasis?: boolean }) {
   const label = `Step ${n}: ${title}`;
   return (
@@ -209,7 +212,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
               return (
                 <li key={c.candidate_id} className="rounded-lg border border-slate-200 p-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs text-slate-600">{c.candidate_id}</span>
+                    <span className="font-mono text-xs text-slate-600">{candidateLabel(c.candidate_id)}</span>
                     {v ? (
                       <Pill tone={v.allowed ? "green" : "red"}>{v.allowed ? "Allowed" : "Blocked"}</Pill>
                     ) : (
