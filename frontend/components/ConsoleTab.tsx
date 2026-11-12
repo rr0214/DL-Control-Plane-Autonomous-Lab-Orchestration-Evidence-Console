@@ -33,6 +33,51 @@ function statusTone(status: string): "green" | "yellow" | "red" | "slate" {
   return "slate";
 }
 
+function StepHeader({ n, title, emphasis = false }: { n: number; title: string; emphasis?: boolean }) {
+  const label = `Step ${n}: ${title}`;
+  return (
+    <h2
+      className={`flex h-8 items-center gap-2 font-semibold tracking-tight text-slate-900 ${
+        emphasis ? "text-lg" : "text-base"
+      }`}
+    >
+      <span
+        aria-hidden
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white"
+      >
+        {n}
+      </span>
+      {label}
+    </h2>
+  );
+}
+
+// Native <details>: closed by default, keyboard accessible, no extra state to manage.
+function Collapsible({
+  title,
+  badge,
+  children,
+}: {
+  title: string;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="group rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <span aria-hidden className="text-slate-400 transition-transform group-open:rotate-90">
+            ▸
+          </span>
+          {title}
+        </span>
+        {badge}
+      </summary>
+      <div className="px-4 pb-4">{children}</div>
+    </details>
+  );
+}
+
 function depthOf(span: Span, byId: Map<string, Span>): number {
   let depth = 0;
   let parent = span.parent_span_id;
@@ -102,12 +147,14 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
 
   const spans = plan?.trace?.spans ?? campaign?.seed_trace?.spans ?? [];
   const spanById = new Map<string, Span>(spans.map((s) => [s.span_id, s] as const));
+  const literature = plan?.literature ?? campaign?.literature ?? [];
   const traceLabel = plan ? `Trace for ${plan.thread_id}` : "Seed trace (CAMP-014)";
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">
-      {/* Left: goal and pre-flight gate */}
+      {/* Step 1 (left): goal and pre-flight gate */}
       <section className="space-y-4 lg:col-span-3">
+        <StepHeader n={1} title="Campaign & Run" />
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Goal</h2>
@@ -122,10 +169,9 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
           </div>
         </div>
 
-        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Related literature</h2>
-          <ul className="mt-2 space-y-2">
-            {(plan?.literature ?? campaign?.literature ?? []).map((lit) => (
+        <Collapsible title="Related literature" badge={literature.length ? <Pill tone="slate">{literature.length}</Pill> : undefined}>
+          <ul className="space-y-2">
+            {literature.map((lit) => (
               <li key={lit.id} className="text-xs">
                 <a href={lit.doi_url} target="_blank" rel="noreferrer" className="font-medium text-sky-700 hover:underline">
                   {lit.title}
@@ -136,11 +182,9 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                 <div className="font-mono text-[11px] text-slate-400">doi:{lit.doi}</div>
               </li>
             ))}
-            {!(campaign?.literature?.length || plan?.literature?.length) && (
-              <li className="text-xs text-slate-500">Loading references...</li>
-            )}
+            {literature.length === 0 && <li className="text-xs text-slate-500">Loading references...</li>}
           </ul>
-        </div>
+        </Collapsible>
 
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Pre-flight gate</h2>
@@ -214,8 +258,9 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
         </div>
       </section>
 
-      {/* Center: live triage queue with the interactive HITL card */}
-      <section className="space-y-4 lg:col-span-5">
+      {/* Step 2 (center): live triage queue with the interactive HITL card. Widest, most prominent column. */}
+      <section className="space-y-4 lg:col-span-6">
+        <StepHeader n={2} title="Safety Triage Queue" emphasis />
         {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200">{error}</div>}
 
         {pending && (
@@ -282,10 +327,10 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
           </div>
         )}
 
-        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Live triage queue</h2>
+        <div className="rounded-xl bg-white p-6 shadow-md ring-2 ring-slate-900/10">
+          <h2 className="text-base font-semibold uppercase tracking-wide text-slate-700">Live triage queue</h2>
           {triageRows.length === 0 && !pending && (
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-3 text-base text-slate-500">
               No samples in triage yet. Plan a batch to start the run.
             </p>
           )}
@@ -294,14 +339,14 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
               <li key={t.sample_id}>
                 <button
                   onClick={() => setSelectedSample(t.sample_id)}
-                  className={`flex w-full items-center justify-between gap-3 py-2 text-left hover:bg-slate-50 ${
+                  className={`flex w-full items-center justify-between gap-3 px-1 py-3 text-left hover:bg-slate-50 ${
                     selectedSample === t.sample_id ? "bg-slate-50" : ""
                   }`}
                 >
                   <div>
                     <div className="font-mono text-xs text-slate-700">{t.sample_id}</div>
-                    <div className="font-mono text-sm text-slate-900">{t.composition}</div>
-                    <div className="text-xs text-slate-500">{t.processing}</div>
+                    <div className="font-mono text-base text-slate-900">{t.composition}</div>
+                    <div className="text-sm text-slate-500">{t.processing}</div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <Pill tone={statusTone(t.status)}>{t.status}</Pill>
@@ -314,10 +359,11 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
         </div>
       </section>
 
-      {/* Right: evidence drawer and span inspector */}
-      <section className="space-y-4 lg:col-span-4">
+      {/* Step 3 (right): decision receipt, with the span inspector tucked away */}
+      <section className="space-y-4 lg:col-span-3">
+        <StepHeader n={3} title="Decision Receipt" />
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Evidence and lineage</h2>
             <a
               href="http://localhost:6006"
@@ -349,12 +395,11 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
           )}
         </div>
 
-        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Span inspector</h2>
+        <Collapsible title="Span inspector">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-slate-500">{traceLabel}</p>
             <Pill tone="slate">OpenTelemetry (simulated)</Pill>
           </div>
-          <p className="mt-1 text-xs text-slate-500">{traceLabel}</p>
           <ul className="mt-2 max-h-72 space-y-0.5 overflow-auto font-mono text-xs">
             {spans.map((s) => (
               <li key={s.span_id}>
@@ -375,7 +420,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
               {JSON.stringify(selectedSpan.attributes, null, 2)}
             </pre>
           )}
-        </div>
+        </Collapsible>
       </section>
     </div>
   );
