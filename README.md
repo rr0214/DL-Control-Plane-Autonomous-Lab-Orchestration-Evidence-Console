@@ -139,7 +139,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-Current suite: 75 tests covering policy rules, the pre-synthesis risk signals, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
+Current suite: 80 tests covering policy rules, the pre-synthesis risk signals, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
 
 ## Configuration
 
@@ -177,6 +177,14 @@ python -m app.run_evals --local       # score and print only, no Phoenix
 Open Phoenix, then Datasets, `sdl-golden-eval-v2`, Experiments, and compare the two runs. At 0.80 one row fails (`missed-risk`: the mock risk model has no entry for that recipe). At 0.95 that row is caught, but three safe recipes are now sent to a scientist, so the overall score drops. That is the review-threshold tradeoff, made visible.
 
 **Honest limits:** the expected labels are illustrative, written by the builder and not by a materials scientist. Seven rows demonstrate the workflow, not statistical confidence. The task runs the real Policy Kernel and pre-synthesis code on recorded inputs; it does not re-run the planner. `sdl-golden-eval-v1` is the earlier set, kept for reference.
+
+### From scientist notes to new checks
+
+When a scientist rejects a recipe, the one-line reason they type is saved on the `scientist.review` trace (`review_note`) and carried into the dataset `sdl-needs-expert-label`, with a first-pass `theme` tag. Run `python -m app.promote_overrides` to pull new overrides and print the notes grouped by theme.
+
+Example: three rejects with notes about furnace blast radius show a real gap. Blast radius is displayed on the review card but does not trigger the review today (only the predicted ductility margin does). That is the kind of finding that becomes a new rule and a new evaluator.
+
+Themes use keyword matching, not an LLM, so they are a rough first pass. A person still reads the notes and owns the categories. Free text in traces is a privacy decision: in an ITAR setting you would add redaction before sending notes to a tracing tool.
 
 ## Known limits
 

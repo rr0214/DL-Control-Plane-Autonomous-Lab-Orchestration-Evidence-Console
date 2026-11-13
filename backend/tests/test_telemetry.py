@@ -77,3 +77,23 @@ def test_dataset_examples_line_up():
     assert len(inputs) == len(outputs) == len(metadata) == 6
     assert all(m["illustrative"] and m["source_project"] == "sdl-control-plane-seed" for m in metadata)
     assert seed_phoenix.DATASET_NAME == "sdl-golden-eval-v1"
+
+
+def test_review_span_carries_the_scientist_note_only_when_there_is_one(tmp_path, monkeypatch):
+    from app.orchestrator import CampaignOrchestrator
+    import app.telemetry as tel
+
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = provider.get_tracer("t")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("SDL_DB_PATH", str(tmp_path / "sdl.db"))
+    monkeypatch.setattr(tel.trace, "get_tracer", lambda name, *a, **k: tracer)
+    orch = CampaignOrchestrator(str(tmp_path / "cp.sqlite"))
+    for thread, note in (("t-note", "  Furnace blast radius is high  "), ("t-none", "")):
+        orch.plan("CAMP-014", thread)
+        orch.review(thread, "reject", note)
+    reviews = {s.attributes["thread_id"]: s.attributes for s in exporter.get_finished_spans() if s.name == "scientist.review"}
+    assert reviews["t-note"]["review_note"] == "Furnace blast radius is high"
+    assert "review_note" not in reviews["t-none"]

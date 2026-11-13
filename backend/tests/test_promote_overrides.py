@@ -252,3 +252,44 @@ def test_dataset_inputs_carry_the_pre_synthesis_signals():
     first = client.datasets.store[po.DATASET_NAME][0]["input"]
     assert first["review_stage"] == "pre_synthesis"
     assert first["predicted_ductility_margin"] == 0.71 and first["furnace_blast_radius"] == "high"
+
+
+# ---- scientist notes and themes ---------------------------------------------------------------
+
+def review_with_note(span_id, thread, decision, note):
+    s = review(span_id, thread, decision)
+    s["attributes"]["review_note"] = note
+    return s
+
+
+def test_theme_buckets_notes_by_keyword_and_handles_empty_and_unknown():
+    assert po.theme_for("Furnace blast radius is high, not worth it") == "furnace_blast_radius"
+    assert po.theme_for("Ductility margin 0.71 too close to Run-088") == "ductility_margin"
+    assert po.theme_for("Gut feel says no") == "other"
+    assert po.theme_for("") == "no_note" and po.theme_for(None) == "no_note"
+
+
+def test_note_is_read_from_the_review_span_and_carried_into_the_dataset_row():
+    spans = [plan("P1", "t1"), presynth("P1", "C-3"), review_with_note("R1", "t1", "reject", "Blast radius too high")]
+    client = FakeClient(spans)
+    po.promote(client, "sdl-control-plane")
+    row = client.datasets.store[po.DATASET_NAME][0]
+    assert row["output"]["scientist_note"] == "Blast radius too high"
+    assert row["metadata"]["theme"] == "furnace_blast_radius"
+    assert "expected_status" not in row["output"]  # the note is evidence, not the expert's label
+
+
+def test_overrides_without_a_note_still_promote():
+    client = FakeClient(two_override_world())
+    po.promote(client, "sdl-control-plane")
+    rows = client.datasets.store[po.DATASET_NAME]
+    assert all(r["output"]["scientist_note"] == "" and r["metadata"]["theme"] == "no_note" for r in rows)
+
+
+def test_summary_shows_each_note_and_groups_them_by_theme():
+    spans = []
+    for i, note in enumerate(["Furnace blast radius is high", "Blast radius, not worth the risk", "Margin looks thin"], 1):
+        spans += [plan(f"P{i}", f"t{i}"), presynth(f"P{i}", "C-3"), review_with_note(f"R{i}", f"t{i}", "reject", note)]
+    text = po.format_summary(po.promote(FakeClient(spans), "sdl-control-plane"))
+    assert 'note: "Furnace blast radius is high"' in text
+    assert "2 x furnace_blast_radius" in text and "1 x ductility_margin" in text

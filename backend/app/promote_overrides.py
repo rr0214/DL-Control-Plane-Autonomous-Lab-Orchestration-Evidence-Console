@@ -35,6 +35,23 @@ TRIAGE_SPAN = "sample.triage"
 PRESYNTH_SPAN = "presynthesis.review"
 SPAN_LIMIT = 1000
 
+# Themes are a first pass at axial coding: the builder names the buckets, this just tallies notes into them.
+# Keyword matching is crude on purpose (no LLM, no tokens). A human still reads the notes and owns the buckets.
+THEMES: list[tuple[str, tuple[str, ...]]] = [
+    ("furnace_blast_radius", ("furnace", "blast")),
+    ("ductility_margin", ("ductil", "margin", "crack", "brittle")),
+]
+
+
+def theme_for(note: str) -> str:
+    text = (note or "").lower()
+    if not text.strip():
+        return "no_note"
+    for name, words in THEMES:
+        if any(w in text for w in words):
+            return name
+    return "other"
+
 
 @dataclass
 class OverrideRow:
@@ -52,6 +69,11 @@ class OverrideRow:
     plan_trace_id: str | None
     reviewed_at: str
     thread_link_ambiguous: bool
+    scientist_note: str = ""
+
+    @property
+    def theme(self) -> str:
+        return theme_for(self.scientist_note)
 
     def as_example(self, project: str) -> tuple[dict, dict, dict]:
         inputs = {
@@ -66,9 +88,10 @@ class OverrideRow:
         }
         # The scientist's decision is an observed fact. There is deliberately no expected_status
         # here: that is the expert's call, not ours.
-        outputs = {"scientist_decision": self.decision}
+        outputs = {"scientist_decision": self.decision, "scientist_note": self.scientist_note}
         metadata = {
             "label_status": "needs_expert_label",
+            "theme": self.theme,
             "source_project": project,
             "source_review_span_id": self.review_span_id,
             "source_review_trace_id": self.review_trace_id,
@@ -184,6 +207,7 @@ def build_rows(
                 plan_trace_id=plan_trace,
                 reviewed_at=review.get("start_time", ""),
                 thread_link_ambiguous=thread_id in ambiguous,
+                scientist_note=str(a.get("review_note") or ""),
             )
         )
     return rows
@@ -275,6 +299,16 @@ def format_summary(r: PromotionResult, phoenix_url: str = telemetry.PHOENIX_UI_U
             lines.append(
                 f"  thread {row.thread_id:<16} decision={row.decision:<7} candidate={row.candidate_id or 'n/a':<5} {signal}{flag}"
             )
+            if row.scientist_note:
+                lines.append(f"      note: \"{row.scientist_note}\"  [theme: {row.theme}]")
+    if r.added:
+        tally: dict[str, int] = {}
+        for row in r.added:
+            tally[row.theme] = tally.get(row.theme, 0) + 1
+        lines.append("")
+        lines.append("Themes in these notes (the first pass at grouping failure modes):")
+        for name, n in sorted(tally.items(), key=lambda kv: -kv[1]):
+            lines.append(f"  {n} x {name}")
     if r.overrides == 0:
         lines.append("")
         lines.append("No scientist overrides found yet. In the console, plan a batch and choose Revise or Reject")

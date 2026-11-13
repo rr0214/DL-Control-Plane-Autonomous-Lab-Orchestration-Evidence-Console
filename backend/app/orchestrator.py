@@ -39,7 +39,11 @@ class CampaignOrchestrator:
         config = {"configurable": {"thread_id": thread_id}}
         # scientist_override is True when the human did anything other than approve the Yellow sample.
         with self._lock, telemetry.span(
-            "scientist.review", thread_id=thread_id, decision=decision, scientist_override=decision != "approve"
+            "scientist.review",
+            thread_id=thread_id,
+            decision=decision,
+            scientist_override=decision != "approve",
+            review_note=(note or "").strip() or None,
         ):
             out = self.graph.invoke(Command(resume={"decision": decision, "note": note}), config)
             return self._summarize(thread_id, config, out)
