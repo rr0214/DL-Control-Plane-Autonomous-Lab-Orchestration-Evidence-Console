@@ -140,6 +140,13 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
             campaign_id=state.get("campaign_id"),
             candidate_id=cand["candidate_id"],
             predicted_ductility_margin=risk["predicted_ductility_margin"],
+            # Everything the scientist sees on the review card, so a trace can reconstruct the decision.
+            predicted_elongation_pct=risk.get("predicted_elongation_pct"),
+            baseline_elongation_pct=risk.get("baseline_elongation_pct"),
+            min_elongation_pct=risk.get("min_elongation_pct"),
+            ductility_label=risk.get("ductility_label"),
+            baseline_run=risk.get("baseline_run"),
+            phase_stability=risk.get("phase_stability"),
             furnace_blast_radius=risk["furnace_blast_radius"],
             review_required=review_required,
         ):

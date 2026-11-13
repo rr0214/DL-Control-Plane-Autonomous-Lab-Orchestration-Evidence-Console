@@ -75,3 +75,27 @@ def test_low_risk_recipes_skip_review_and_are_synthesized(orch, monkeypatch):
     out = orch.plan("CAMP-014", "thread-lowrisk")
     assert out["status"] == "complete" and out["pending"] is None
     assert out["triage"][0]["telemetry"] is not None
+
+
+def test_review_span_records_everything_the_scientist_sees(orch):
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    import app.telemetry as tel
+
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = provider.get_tracer("t")
+    original = tel.trace.get_tracer
+    tel.trace.get_tracer = lambda name, *a, **k: tracer
+    try:
+        orch.plan("CAMP-014", "thread-trace")
+    finally:
+        tel.trace.get_tracer = original
+    span = next(s for s in exporter.get_finished_spans() if s.name == "presynthesis.review" and s.attributes["review_required"])
+    a = span.attributes
+    assert a["predicted_elongation_pct"] == 2.1 and a["baseline_elongation_pct"] == 3.0 and a["min_elongation_pct"] == 2.4
+    assert a["furnace_blast_radius"] == "high" and a["baseline_run"] == "Run-071"
+    assert a["ductility_label"] == "borderline" and a["phase_stability"] == 0.97
