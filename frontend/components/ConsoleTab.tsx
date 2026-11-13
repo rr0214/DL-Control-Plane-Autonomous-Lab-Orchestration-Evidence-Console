@@ -214,7 +214,11 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono text-xs text-slate-600">{candidateLabel(c.candidate_id)}</span>
                     {v ? (
-                      <Pill tone={v.allowed ? "green" : "red"}>{v.allowed ? "Allowed" : "Blocked"}</Pill>
+                      v.allowed && (pending?.candidate_id === c.candidate_id || triageRows.some((t) => t.candidate_id === c.candidate_id && t.status === "Yellow")) ? (
+                        <Pill tone="yellow">Needs Review</Pill>
+                      ) : (
+                        <Pill tone={v.allowed ? "green" : "red"}>{v.allowed ? "Allowed" : "Blocked"}</Pill>
+                      )
                     ) : (
                       <Pill tone="slate">Unchecked</Pill>
                     )}
