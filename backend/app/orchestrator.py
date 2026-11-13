@@ -26,7 +26,7 @@ class CampaignOrchestrator:
 
     def plan(self, campaign_id: str, thread_id: str) -> dict:
         config = {"configurable": {"thread_id": thread_id}}
-        with self._lock, telemetry.span("campaign.plan", campaign_id=campaign_id, thread_id=thread_id, mcp_mode=gateway.mode) as sp:
+        with self._lock, telemetry.span("campaign.plan", kind="AGENT", campaign_id=campaign_id, thread_id=thread_id, mcp_mode=gateway.mode) as sp:
             out = self.graph.invoke({"campaign_id": campaign_id}, config)
             summary = self._summarize(thread_id, config, out)
             sp.set_attribute("status", summary["status"])

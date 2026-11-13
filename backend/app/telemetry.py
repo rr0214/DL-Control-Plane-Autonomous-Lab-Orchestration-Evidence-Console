@@ -30,6 +30,8 @@ DEFAULT_ENDPOINT = "http://localhost:6006"
 LIVE_PROJECT = "sdl-control-plane"
 PHOENIX_UI_URL = "http://localhost:6006"
 
+SPAN_KIND_ATTR = "openinference.span.kind"
+
 _state = {"enabled": False}
 
 
@@ -97,10 +99,14 @@ def set_attrs(sp: trace.Span, attrs: dict[str, Any]) -> None:
 
 
 @contextmanager
-def span(name: str, passthrough: tuple[type[BaseException], ...] = (), **attrs: Any) -> Iterator[trace.Span]:
+def span(
+    name: str, passthrough: tuple[type[BaseException], ...] = (), kind: str = "CHAIN", **attrs: Any
+) -> Iterator[trace.Span]:
     """Open a span. Exceptions in `passthrough` (for example a LangGraph interrupt) are re-raised
-    without marking the span as an error."""
+    without marking the span as an error. `kind` is the OpenInference span kind Phoenix shows in its
+    Kind column (CHAIN for a workflow step, AGENT for an agent run, TOOL for a tool call)."""
     with trace.get_tracer(TRACER_NAME).start_as_current_span(name, record_exception=False, set_status_on_exception=False) as sp:
+        sp.set_attribute(SPAN_KIND_ATTR, kind)
         set_attrs(sp, attrs)
         try:
             yield sp

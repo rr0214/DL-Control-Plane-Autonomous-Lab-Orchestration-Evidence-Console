@@ -97,3 +97,26 @@ def test_review_span_carries_the_scientist_note_only_when_there_is_one(tmp_path,
     reviews = {s.attributes["thread_id"]: s.attributes for s in exporter.get_finished_spans() if s.name == "scientist.review"}
     assert reviews["t-note"]["review_note"] == "Furnace blast radius is high"
     assert "review_note" not in reviews["t-none"]
+
+
+def test_spans_carry_a_phoenix_span_kind():
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = provider.get_tracer("t")
+    import app.telemetry as tel
+
+    original = tel.trace.get_tracer
+    tel.trace.get_tracer = lambda name, *a, **k: tracer
+    try:
+        with tel.span("step"):
+            pass
+        with tel.span("run", kind="AGENT"):
+            pass
+        with tel.span("call", kind="TOOL"):
+            pass
+    finally:
+        tel.trace.get_tracer = original
+    kinds = {s.name: s.attributes["openinference.span.kind"] for s in exporter.get_finished_spans()}
+    assert kinds == {"step": "CHAIN", "run": "AGENT", "call": "TOOL"}
+
