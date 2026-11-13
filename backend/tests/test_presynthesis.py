@@ -36,5 +36,14 @@ def test_signals_are_labeled_as_a_mock_and_are_deterministic():
 def test_review_reason_names_the_signals_and_the_timing():
     s = presynthesis.risk_signals("Nb50-Ti20-Cr15-Al15", "Additive/Anneal")
     reason = presynthesis.review_reason(s)
-    assert "Run-071" in reason and "borderline" in reason and "0.71" in reason
+    assert "Run-071" in reason and "borderline" in reason
+    assert "2.1% elongation" in reason and "3.0%" in reason and "minimum 2.4%" in reason
     assert "blast radius is high" in reason and "before any sample is made" in reason
+
+
+def test_elongation_display_is_the_margin_scaled_to_the_baseline_and_does_not_change_the_decision():
+    s = presynthesis.risk_signals("Nb50-Ti20-Cr15-Al15", "Additive/Anneal")
+    assert s["predicted_elongation_pct"] == 2.1 and s["baseline_elongation_pct"] == 3.0 and s["min_elongation_pct"] == 2.4
+    assert s["predicted_elongation_pct"] < s["min_elongation_pct"]  # same call as margin < 0.80
+    ok = presynthesis.risk_signals("Nb40-Ti25-Cr20-Al15", "Arc-Melt")
+    assert ok["predicted_elongation_pct"] == 2.8 and ok["predicted_elongation_pct"] >= ok["min_elongation_pct"]

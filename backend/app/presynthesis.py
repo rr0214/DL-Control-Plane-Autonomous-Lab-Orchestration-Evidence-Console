@@ -15,6 +15,9 @@ from .config import RESTRICTED_ELEMENTS
 SOURCE = "mock pre-synthesis risk model (demo values, not a trained model)"
 BASELINE_RUN = "Run-071"
 REVIEW_BELOW = 0.80  # predicted ductility margin under this needs a scientist before synthesis
+# Mock scale for display only: the margin is a ratio to the baseline run, so elongation = margin x baseline.
+# The decision still uses the ratio. These percentages are demo values, not measurements.
+BASELINE_ELONGATION_PCT = 3.0
 
 DEFAULT_SIGNALS = {
     "predicted_ductility_margin": 0.92,
@@ -45,6 +48,9 @@ def risk_signals(composition: str, processing: str) -> dict:
         "baseline_run": BASELINE_RUN,
         "predicted_ductility_margin": margin,
         "ductility_label": ductility_label(margin),
+        "predicted_elongation_pct": round(margin * BASELINE_ELONGATION_PCT, 1),
+        "baseline_elongation_pct": BASELINE_ELONGATION_PCT,
+        "min_elongation_pct": round(REVIEW_BELOW * BASELINE_ELONGATION_PCT, 1),
         "furnace_blast_radius": base["furnace_blast_radius"],
         "phase_stability": float(base["phase_stability"]),
         # This one is real, not mocked: it comes from the same restricted-element list the Policy Kernel uses.
@@ -58,7 +64,8 @@ def needs_review(signals: dict) -> bool:
 
 def review_reason(signals: dict) -> str:
     return (
-        f"Predicted ductility margin vs. {signals['baseline_run']} is {signals['ductility_label']} "
-        f"({signals['predicted_ductility_margin']:.2f}) and furnace blast radius is "
+        f"Predicted ductility is {signals['ductility_label']}: {signals['predicted_elongation_pct']:.1f}% elongation vs. "
+        f"{signals['baseline_elongation_pct']:.1f}% for baseline {signals['baseline_run']} "
+        f"(minimum {signals['min_elongation_pct']:.1f}% to skip review), and furnace blast radius is "
         f"{signals['furnace_blast_radius']}. Review the recipe before any sample is made."
     )

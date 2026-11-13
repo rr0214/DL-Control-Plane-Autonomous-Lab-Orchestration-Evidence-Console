@@ -296,16 +296,21 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
               </div>
               <ul className="space-y-1">
                 <li>
-                  Predicted ductility margin vs. {pending.risk.baseline_run}:{" "}
+                  Predicted ductility (elongation):{" "}
                   <strong>
-                    {pending.risk.ductility_label} ({pending.risk.predicted_ductility_margin.toFixed(2)})
+                    {pending.risk.predicted_elongation_pct.toFixed(1)}% ({pending.risk.ductility_label})
                   </strong>
+                  <div className="text-xs text-amber-800">
+                    Baseline {pending.risk.baseline_run}: {pending.risk.baseline_elongation_pct.toFixed(1)}% · minimum to skip
+                    review: {pending.risk.min_elongation_pct.toFixed(1)}%
+                  </div>
                 </li>
                 <li>
                   Furnace blast radius: <strong>{pending.risk.furnace_blast_radius}</strong>
                 </li>
                 <li>
-                  Phase stability: {pending.risk.phase_stability.toFixed(2)} | Restricted elements:{" "}
+                  Phase stability: predicted to stay single phase ({Math.round(pending.risk.phase_stability * 100)}% confidence) |
+                  Restricted elements:{" "}
                   {pending.risk.restricted_elements.length ? pending.risk.restricted_elements.join(", ") : "None"}
                 </li>
               </ul>

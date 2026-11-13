@@ -18,7 +18,7 @@ def test_plan_pauses_for_review_before_any_sample_is_made(orch):
     pending = out["pending"]
     assert pending["status"] == "Yellow" and pending["stage"] == "pre_synthesis"
     assert pending["options"] == ["approve", "revise", "reject"]
-    assert "0.71" in pending["reason"] and "high" in pending["reason"]
+    assert "2.1% elongation" in pending["reason"] and "high" in pending["reason"]
     assert "before any sample is made" in pending["reason"]
     # No scan data exists yet: the recipe has not been synthesized.
     assert "telemetry" not in pending

@@ -29,6 +29,9 @@ export type Risk = {
   baseline_run: string;
   predicted_ductility_margin: number;
   ductility_label: string;
+  predicted_elongation_pct: number;
+  baseline_elongation_pct: number;
+  min_elongation_pct: number;
   furnace_blast_radius: string;
   phase_stability: number;
   restricted_elements: string[];
