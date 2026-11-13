@@ -115,6 +115,7 @@ backend/
     policy_kernel.py    Deterministic gate
     optimizer.py        bayesian_optimizer tool (mock surrogate)
     presynthesis.py     Mock pre-synthesis risk signals (deterministic)
+    run_evals.py        Phoenix experiment: golden dataset v2, code evaluators, threshold comparison
     workcell.py         Simulated scan telemetry and Green/Yellow/Red classifier
     mcp_server.py       FastMCP tool contract and in-memory ToolGateway
     literature.json     Curated CALPHAD and refractory-alloy references (DOIs checked)
@@ -138,7 +139,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-Current suite: 67 tests covering policy rules, the pre-synthesis risk signals, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
+Current suite: 75 tests covering policy rules, the pre-synthesis risk signals, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
 
 ## Configuration
 
@@ -153,6 +154,29 @@ Copy `.env.example` to `.env`:
 | `SDL_TRACING` | `on` | Set to `off` to disable Phoenix tracing |
 | `PHOENIX_COLLECTOR_ENDPOINT` | `http://localhost:6006` | Where traces are sent |
 | `SDL_PHOENIX_PROJECT` | `sdl-control-plane` | Phoenix project for live runs |
+
+## Evals in Phoenix (Hamel Husain's error-analysis method)
+
+Evaluation targets the **system**, not just the model. Plain-code checks come first; an LLM judge is reserved for subjective failures and is not built yet.
+
+| Step | Where it lives |
+|---|---|
+| 1. Collect real traces | Live runs go to `sdl-control-plane`; curated examples to `sdl-control-plane-seed` |
+| 2. Open coding (Pass/Fail plus first upstream failure) | `outcome` and `first_upstream_failure` annotations on the seed traces |
+| 3. Axial coding (failure modes) | `failure_mode` in the metadata of dataset `sdl-golden-eval-v2` |
+| 4. Targeted evaluators | `gate_correct` and `review_correct`, both plain code, run as a Phoenix experiment |
+| 5. Promote overrides | `python -m app.promote_overrides` sends scientist overrides to `sdl-needs-expert-label` |
+
+Failure modes: unsafe recipe passes the gate, a known failure is repeated, a risky recipe skips review, a safe recipe is over-escalated.
+
+```
+python -m app.run_evals --compare     # runs the experiment at review threshold 0.80 and 0.95
+python -m app.run_evals --local       # score and print only, no Phoenix
+```
+
+Open Phoenix, then Datasets, `sdl-golden-eval-v2`, Experiments, and compare the two runs. At 0.80 one row fails (`missed-risk`: the mock risk model has no entry for that recipe). At 0.95 that row is caught, but three safe recipes are now sent to a scientist, so the overall score drops. That is the review-threshold tradeoff, made visible.
+
+**Honest limits:** the expected labels are illustrative, written by the builder and not by a materials scientist. Seven rows demonstrate the workflow, not statistical confidence. The task runs the real Policy Kernel and pre-synthesis code on recorded inputs; it does not re-run the planner. `sdl-golden-eval-v1` is the earlier set, kept for reference.
 
 ## Known limits
 
