@@ -67,6 +67,10 @@ class FakeDatasets:
 class FakeSpans:
     def __init__(self, spans):
         self.spans = spans
+        self.annotations = []
+
+    def add_span_annotation(self, **kw):
+        self.annotations.append(kw)
 
     def get_spans(self, project_identifier, name=None, trace_ids=None, limit=100):
         out = [s for s in self.spans if s["name"] == name]
@@ -293,3 +297,43 @@ def test_summary_shows_each_note_and_groups_them_by_theme():
     text = po.format_summary(po.promote(FakeClient(spans), "sdl-control-plane"))
     assert 'note: "Furnace blast radius is high"' in text
     assert "2 x furnace_blast_radius" in text and "1 x ductility_margin" in text
+
+
+# ---- notes written onto the plan trace as annotations ---------------------------------------
+
+def noted_world():
+    spans = []
+    for i, note in enumerate(["Furnace blast radius is high", "Predicted ductility too close to cracking"], 1):
+        spans += [plan(f"P{i}", f"t{i}"), presynth(f"P{i}", "C-3"), review_with_note(f"R{i}", f"t{i}", "reject", note)]
+    spans += [plan("P3", "t3"), presynth("P3", "C-3"), review("R3", "t3", "reject")]  # no note: nothing to attach
+    return spans
+
+
+def test_notes_are_attached_to_the_plan_span_with_theme_and_text():
+    client = FakeClient(noted_world())
+    result = po.promote(client, "sdl-control-plane")
+    notes = client.spans.annotations
+    assert result.annotated == 2 and len(notes) == 2
+    first = notes[0]
+    assert first["span_id"] == "plan-P1"  # the campaign.plan span, not the review span
+    assert first["annotation_name"] == "scientist_feedback" and first["annotator_kind"] == "HUMAN"
+    assert first["label"] == "furnace_blast_radius" and first["explanation"] == "Furnace blast radius is high"
+    assert first["identifier"] == "R1"  # re-running updates the same annotation instead of duplicating it
+
+
+def test_dry_run_writes_no_annotations_but_reports_how_many_it_would():
+    client = FakeClient(noted_world())
+    result = po.promote(client, "sdl-control-plane", dry_run=True)
+    assert client.spans.annotations == [] and result.annotated == 0 and result.annotatable == 2
+    assert "Would write to traces:" in po.format_summary(result)
+
+
+def test_annotating_is_best_effort_and_never_blocks_the_dataset_write():
+    client = FakeClient(noted_world())
+
+    def boom(**kw):
+        raise RuntimeError("phoenix hiccup")
+
+    client.spans.add_span_annotation = boom
+    result = po.promote(client, "sdl-control-plane")
+    assert result.annotated == 0 and len(result.added) == 3

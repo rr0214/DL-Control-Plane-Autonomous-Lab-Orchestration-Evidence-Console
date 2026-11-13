@@ -22,11 +22,14 @@ Token-free: no LLM calls. Read-only against the app: it touches only Phoenix.
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from dataclasses import dataclass, field
 from typing import Any
 
 from . import telemetry
+
+log = logging.getLogger(__name__)
 
 DATASET_NAME = "sdl-needs-expert-label"
 REVIEW_SPAN = "scientist.review"
@@ -70,6 +73,7 @@ class OverrideRow:
     reviewed_at: str
     thread_link_ambiguous: bool
     scientist_note: str = ""
+    plan_span_id: str | None = None  # the campaign.plan span for this thread, where feedback is attached
 
     @property
     def theme(self) -> str:
@@ -112,6 +116,8 @@ class PromotionResult:
     already_present: int = 0
     added: list[OverrideRow] = field(default_factory=list)
     ambiguous_threads: list[str] = field(default_factory=list)
+    annotated: int = 0  # notes written onto campaign.plan spans in Phoenix
+    annotatable: int = 0
     dataset_size_after: int | None = None
     hit_span_limit: bool = False
 
@@ -208,6 +214,7 @@ def build_rows(
                 reviewed_at=review.get("start_time", ""),
                 thread_link_ambiguous=thread_id in ambiguous,
                 scientist_note=str(a.get("review_note") or ""),
+                plan_span_id=plan["context"]["span_id"] if plan else None,
             )
         )
     return rows
@@ -220,6 +227,37 @@ def _existing_review_span_ids(client: Any, dataset: str) -> tuple[bool, set[str]
     ds = client.datasets.get_dataset(dataset=dataset)
     ids = {(e.get("metadata") or {}).get("source_review_span_id") for e in ds.examples}
     return True, {i for i in ids if i}
+
+
+ANNOTATION_NAME = "scientist_feedback"
+
+
+def annotate_plan_spans(client: Any, rows: list[OverrideRow]) -> int:
+    """Attach each scientist note to the campaign.plan span of its run, as a Phoenix annotation.
+
+    The plan span is where the gate and the risk signals are recorded, so the note sits next to the
+    evidence needed to find the root cause. The review span keeps the raw note as an attribute.
+    The review span id is the annotation identifier, so running this again updates, not duplicates.
+    Best effort: a failure here never stops the promotion."""
+    done = 0
+    for r in rows:
+        if not (r.scientist_note and r.plan_span_id):
+            continue
+        try:
+            client.spans.add_span_annotation(
+                span_id=r.plan_span_id,
+                annotation_name=ANNOTATION_NAME,
+                annotator_kind="HUMAN",
+                label=r.theme,
+                explanation=r.scientist_note,
+                metadata={"decision": r.decision, "review_span_id": r.review_span_id},
+                identifier=r.review_span_id,
+                sync=True,
+            )
+            done += 1
+        except Exception as exc:  # observability must not break the workflow
+            log.warning("Could not annotate span %s: %s", r.plan_span_id, exc)
+    return done
 
 
 def promote(client: Any, project: str, dataset: str = DATASET_NAME, dry_run: bool = False) -> PromotionResult:
@@ -247,6 +285,9 @@ def promote(client: Any, project: str, dataset: str = DATASET_NAME, dry_run: boo
     new_rows = [r for r in rows if r.review_span_id not in present]
     result.already_present = len(rows) - len(new_rows)
     result.added = new_rows
+    result.annotatable = sum(1 for r in rows if r.scientist_note and r.plan_span_id)
+    if not dry_run:
+        result.annotated = annotate_plan_spans(client, rows)
 
     if dry_run or not new_rows:
         return result
@@ -282,6 +323,7 @@ def format_summary(r: PromotionResult, phoenix_url: str = telemetry.PHOENIX_UI_U
         f"  Overrides (not approve):   {r.overrides}",
         f"  Already in dataset:        {r.already_present}",
         f"  {'Would add' if r.dry_run else 'Added now'}:".ljust(29) + f"{len(r.added)}",
+        f"  {'Would write' if r.dry_run else 'Written'} to traces:".ljust(29) + f"{r.annotatable if r.dry_run else r.annotated} note(s) as '{ANNOTATION_NAME}' on campaign.plan",
         f"  Dataset:                   {r.dataset}"
         + (f"  ({r.dataset_size_after} examples total)" if r.dataset_size_after is not None else ""),
     ]

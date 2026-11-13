@@ -139,7 +139,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-Current suite: 84 tests covering policy rules, the pre-synthesis risk signals, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
+Current suite: 87 tests covering policy rules, the pre-synthesis risk signals, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
 
 ## Configuration
 
@@ -180,7 +180,7 @@ Open Phoenix, then Datasets, `sdl-golden-eval-v2`, Experiments, and compare the 
 
 ### From scientist notes to new checks
 
-When a scientist rejects a recipe, the one-line reason they type is saved on the `scientist.review` trace (`review_note`) and carried into the dataset `sdl-needs-expert-label`, with a first-pass `theme` tag. Run `python -m app.promote_overrides` to pull new overrides and print the notes grouped by theme.
+When a scientist rejects a recipe, the one-line reason they type is saved on the `scientist.review` trace (`review_note`) and carried into the dataset `sdl-needs-expert-label`, with a first-pass `theme` tag. Run `python -m app.promote_overrides` to pull new overrides and print the notes grouped by theme. The same run also writes each note onto the matching `campaign.plan` span as a Phoenix annotation named `scientist_feedback` (label is the theme), so the note sits next to the gate and risk evidence needed to find the root cause. Re-running updates the annotation instead of duplicating it, and `--dry-run` writes nothing.
 
 Example: three rejects with notes about furnace blast radius show a real gap. Blast radius is displayed on the review card but does not trigger the review today (only the predicted ductility margin does). That is the kind of finding that becomes a new rule and a new evaluator.
 
