@@ -56,3 +56,24 @@ def test_main_exits_clearly_when_phoenix_is_down(monkeypatch, capsys):
 def test_local_mode_never_touches_phoenix(capsys):
     assert ev.main(["--local", "--compare"]) == 0
     assert "Review threshold 0.80" in capsys.readouterr().out
+
+
+def test_summary_matches_the_experiment_scoring_and_is_labeled_illustrative():
+    s = ev.summary()
+    by_t = {r["threshold"]: r for r in s["runs"]}
+    assert (by_t[0.8]["passed"], by_t[0.8]["total"]) == (6, 7)
+    assert (by_t[0.95]["passed"], by_t[0.95]["total"]) == (4, 7)
+    assert "illustrative" in s["labels"] and "none" not in s["failure_modes"] and len(s["failure_modes"]) == 4
+
+
+def test_evals_summary_endpoint_is_read_only_and_works_without_phoenix(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.api import create_app
+    from app.orchestrator import CampaignOrchestrator
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("SDL_DB_PATH", str(tmp_path / "sdl.db"))
+    client = TestClient(create_app(CampaignOrchestrator(str(tmp_path / "cp.sqlite"))))
+    body = client.get("/api/evals/summary").json()
+    assert body["dataset"] == "sdl-golden-eval-v2" and len(body["runs"]) == 2
+    assert client.post("/api/evals/summary").status_code == 405

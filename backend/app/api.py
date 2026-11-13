@@ -8,7 +8,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import db, seed_camp014, telemetry
+from . import db, run_evals, seed_camp014, telemetry
 from .mcp_server import gateway
 from .orchestrator import CampaignOrchestrator
 
@@ -70,6 +70,11 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
             "tracing": telemetry.is_enabled(),
             "phoenix_url": telemetry.PHOENIX_UI_URL,
         }
+
+    @app.get("/api/evals/summary")
+    def evals_summary() -> dict:
+        """Read-only. Scores the golden dataset against the real gate and review code. No writes, no Phoenix needed."""
+        return run_evals.summary()
 
     @app.get("/api/campaigns/{campaign_id}")
     def get_campaign(campaign_id: str) -> dict:

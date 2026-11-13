@@ -9,7 +9,7 @@ import { API, CampaignView } from "@/lib/api";
 const TABS = [
   { id: "console", label: "Lab Control Console" },
   { id: "architecture", label: "System Architecture" },
-  { id: "evals", label: "Evals & Golden Dataset" },
+  { id: "evals", label: "Evals (Error Analysis)" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];

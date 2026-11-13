@@ -36,7 +36,7 @@ frontend (Next.js, Tailwind)            backend (FastAPI)
 ┌──────────────────────────┐            ┌─────────────────────────────────────────┐
 │ Lab Control Console      │ ──HTTP──▶  │ /api/campaigns/CAMP-014   (state, RBAC)  │
 │ System Architecture      │            │ /api/campaigns/plan       (run graph)    │
-│ Evals & Golden Dataset   │            │ /api/samples/{id}/review  (resume)       │
+│ Evals (Error Analysis)   │            │ /api/samples/{id}/review  (resume)       │
 └──────────────────────────┘            └──────────────┬──────────────────────────┘
                                                        │
                               LangGraph StateGraph (CampaignOrchestrator)
@@ -139,7 +139,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-Current suite: 80 tests covering policy rules, the pre-synthesis risk signals, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
+Current suite: 83 tests covering policy rules, the pre-synthesis risk signals, the pause and resume cycle, RBAC enforcement, reset behavior, MCP tool contracts, the FastMCP and direct transports, probe behavior in both modes, and tracing (off under test, safe when Phoenix is down, seed fixture shape). Tracing is forced off in tests, so no Phoenix is needed.
 
 ## Configuration
 
@@ -188,7 +188,7 @@ Themes use keyword matching, not an LLM, so they are a rough first pass. A perso
 
 ## Known limits
 
-- **Simulated data.** Telemetry, the in-app span inspector timings, and the Evals tab numbers are demo values. The Phoenix seed traces are curated examples, labeled as illustrative. Live Phoenix traces are real spans from real runs of this code.
+- **Simulated data.** Telemetry and the in-app span inspector timings are demo values. The Evals tab results are computed live from the golden dataset, whose labels are illustrative. The Phoenix seed traces are curated examples, labeled as illustrative. Live Phoenix traces are real spans from real runs of this code.
 - **Optimizer is a stand-in.** `bayesian_optimizer` returns a fixed table. A real version would fit a surrogate model (such as a Gaussian process) on measured runs.
 - **OpenAI is not wired.** Only Anthropic is supported in real mode.
 - **Revise does not re-queue a recipe.** It is recorded as a decision and the recipe is held. Nothing is re-proposed automatically.

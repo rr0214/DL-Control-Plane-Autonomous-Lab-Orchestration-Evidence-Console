@@ -129,6 +129,20 @@ def score_rows(threshold: float) -> list[dict]:
     return rows
 
 
+def summary(thresholds: tuple[float, ...] = (DEFAULT_THRESHOLD, COMPARE_THRESHOLD)) -> dict[str, Any]:
+    """Read-only snapshot for the console: the same scoring the Phoenix experiment uses, computed locally."""
+    runs = []
+    for t in thresholds:
+        rows = score_rows(t)
+        runs.append({"threshold": t, "passed": sum(r["passed"] for r in rows), "total": len(rows), "rows": rows})
+    return {
+        "dataset": DATASET_NAME,
+        "labels": "illustrative (builder-written, not a domain expert)",
+        "failure_modes": {k: v for k, v in FAILURE_MODES.items() if k != "none"},
+        "runs": runs,
+    }
+
+
 def format_summary(threshold: float) -> str:
     rows = score_rows(threshold)
     by_mode: dict[str, list[bool]] = defaultdict(list)
