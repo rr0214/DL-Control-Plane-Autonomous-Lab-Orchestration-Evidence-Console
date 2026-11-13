@@ -34,6 +34,10 @@ function statusTone(status: string): "green" | "yellow" | "red" | "slate" {
 }
 
 // Display only: "C-1" is shown as "Candidate 1". The underlying candidate_id is never changed.
+// Revise is hidden for now: it currently behaves like Reject (the recipe is held, nothing is re-queued).
+// Flip to true once Revise sends the recipe back to the planner. The backend still accepts "revise".
+const SHOW_REVISE = false;
+
 const candidateLabel = (id: string) => id.replace(/^C-(\d+)$/, "Candidate $1");
 
 function StepHeader({ n, title, emphasis = false }: { n: number; title: string; emphasis?: boolean }) {
@@ -340,13 +344,15 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
               >
                 Approve
               </button>
-              <button
-                disabled={busy}
-                onClick={() => review(pending.sample_id, "revise")}
-                className="rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-              >
-                Revise
-              </button>
+              {SHOW_REVISE && (
+                <button
+                  disabled={busy}
+                  onClick={() => review(pending.sample_id, "revise")}
+                  className="rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  Revise
+                </button>
+              )}
               <button
                 disabled={busy}
                 onClick={() => review(pending.sample_id, "reject")}
