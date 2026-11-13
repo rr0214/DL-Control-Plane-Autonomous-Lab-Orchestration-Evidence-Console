@@ -302,7 +302,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                   </strong>
                   <div className="text-xs text-amber-800">
                     Baseline {pending.risk.baseline_run}: {pending.risk.baseline_elongation_pct.toFixed(1)}% · minimum to skip
-                    review: {pending.risk.min_elongation_pct.toFixed(1)}%
+                    review: {pending.risk.min_elongation_pct.toFixed(1)}% (set by the application spec)
                   </div>
                 </li>
                 <li>

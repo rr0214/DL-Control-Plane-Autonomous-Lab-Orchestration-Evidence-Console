@@ -3,71 +3,104 @@
 import { useEffect, useState } from "react";
 import { API } from "@/lib/api";
 
-type Component = { id: string; name: string; plane: "core" | "pluggable"; detail: string; status: "built" | "planned" };
+type Status = "Built" | "Mock" | "Simulated" | "Partly built";
 
-const COMPONENTS: Component[] = [
+type Step = {
+  n: number;
+  step: string;
+  what: string;
+  tooling: string;
+  status: Status;
+};
+
+// One row per step of the loop, in the order a run actually goes. Status is honest about what is real.
+const STEPS: Step[] = [
   {
-    id: "rbac",
-    name: "RBAC governance",
-    plane: "core",
-    status: "built",
-    detail: "Roles decide who may approve, revise, or reject a recipe before synthesis. Enforced on every review call (X-Role header).",
+    n: 1,
+    step: "Read",
+    what: "The planner gets the goal, past runs and literature.",
+    tooling: "SQLite run history, curated literature file, MCP tool search_calphad_literature",
+    status: "Built",
   },
   {
-    id: "langgraph",
-    name: "LangGraph orchestrator",
-    plane: "core",
-    status: "built",
-    detail: "StateGraph with SQLite checkpointing. A risky recipe pauses before synthesis with interrupt() and resumes with Command(resume=...).",
+    n: 2,
+    step: "Propose",
+    what: "The LLM picks element sets and routes, with a short rationale.",
+    tooling: "Claude via tool calling (Anthropic API). Mock plan when no API key is set.",
+    status: "Mock",
   },
   {
-    id: "mcp",
-    name: "MCP tool gateway",
-    plane: "core",
-    status: "built",
-    detail:
-      "Standard tool contract: propose_alloy_ratios, check_negative_runs, and search_calphad_literature. The graph calls them through an in-memory FastMCP session. If that session fails, it calls the same functions directly and records which path ran.",
+    n: 3,
+    step: "Optimize",
+    what: "A numeric optimizer sets the exact percentages. The LLM never writes ratios.",
+    tooling: "Bayesian optimizer (fixed table today), called through MCP tool propose_alloy_ratios",
+    status: "Mock",
   },
   {
-    id: "policy",
-    name: "Policy Kernel",
-    plane: "core",
-    status: "built",
-    detail: "Plain code, no LLM, under 50 ms. Blocks restricted elements and repeats of prior (composition + processing) runs.",
+    n: 4,
+    step: "Gate",
+    what: "Plain code blocks restricted elements and repeats of failed runs.",
+    tooling: "Policy Kernel (Python), MCP tool check_negative_runs",
+    status: "Built",
   },
   {
-    id: "optimizer",
-    name: "Bayesian optimizer",
-    plane: "pluggable",
-    status: "built",
-    detail: "Swappable ML component. Mock surrogate today; the only source of numeric stoichiometry.",
+    n: 5,
+    step: "Score",
+    what: "A risk model predicts ductility and phase stability before anything is made.",
+    tooling: "Pre-synthesis risk model (hard-coded lookup today)",
+    status: "Mock",
   },
   {
-    id: "llm",
-    name: "LLM planner",
-    plane: "pluggable",
-    status: "built",
-    detail: "Claude tool-calling when ANTHROPIC_API_KEY is set. Picks element sets and routes; never writes ratios.",
+    n: 6,
+    step: "Review",
+    what: "A scientist approves or rejects the recipe and can leave a note.",
+    tooling: "LangGraph interrupt() with SQLite checkpoints, role-based access (RBAC), SHA-256 receipts",
+    status: "Built",
   },
   {
-    id: "risk",
-    name: "Pre-synthesis risk model",
-    plane: "pluggable",
-    status: "planned",
-    detail:
-      "Mock lookup today (predicted ductility margin vs. Run-071, furnace blast radius, phase stability). Swap for a trained model. Only the restricted-element check is real.",
+    n: 7,
+    step: "Make and measure",
+    what: "A robot makes the sample and scans it.",
+    tooling: "Robotic workcell: synthesis robot, SEM and XRD instruments (simulated readings today)",
+    status: "Simulated",
   },
   {
-    id: "workcell",
-    name: "Robotics workcell",
-    plane: "pluggable",
-    status: "built",
-    detail: "Simulated telemetry today (SEM CV confidence, XRD phase match, crack detection). Swap for instrument drivers.",
+    n: 8,
+    step: "Learn",
+    what: "Failures are found in traces, turned into tests, and fed back.",
+    tooling: "OpenTelemetry, Arize Phoenix, golden dataset and experiments, promote_overrides script",
+    status: "Partly built",
   },
 ];
 
+const STATUS_TONE: Record<Status, string> = {
+  Built: "bg-emerald-100 text-emerald-800",
+  Mock: "bg-amber-100 text-amber-900",
+  Simulated: "bg-amber-100 text-amber-900",
+  "Partly built": "bg-sky-100 text-sky-900",
+};
+
+function StatusTag({ status }: { status: Status }) {
+  return (
+    <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_TONE[status]}`}>
+      {status}
+    </span>
+  );
+}
+
+function Collapsible({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="group rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
+        <span className="mr-2 inline-block transition group-open:rotate-90">▸</span>
+        {title}
+      </summary>
+      <div className="mt-3 text-sm text-slate-700">{children}</div>
+    </details>
+  );
+}
+
 export default function ArchitectureTab() {
-  const [selected, setSelected] = useState<string>("mcp");
   const [mcpMode, setMcpMode] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,62 +110,120 @@ export default function ArchitectureTab() {
       .catch(() => setMcpMode(null));
   }, []);
 
-  const active = COMPONENTS.find((c) => c.id === selected) ?? COMPONENTS[0];
-  const core = COMPONENTS.filter((c) => c.plane === "core");
-  const pluggable = COMPONENTS.filter((c) => c.plane === "pluggable");
-
-  function badgeFor(c: Component): { text: string; tone: string } {
-    if (c.id === "mcp") {
-      if (mcpMode === "fastmcp") return { text: "Active (FastMCP)", tone: "bg-emerald-100 text-emerald-800" };
-      if (mcpMode === "direct") return { text: "Active (direct fallback)", tone: "bg-amber-100 text-amber-900" };
-      return { text: "Checking...", tone: "bg-slate-200 text-slate-600" };
-    }
-    return c.status === "built"
-      ? { text: "built", tone: "bg-emerald-100 text-emerald-800" }
-      : { text: "planned", tone: "bg-slate-200 text-slate-600" };
-  }
-
-  const renderBox = (c: Component) => {
-    const badge = badgeFor(c);
-    return (
-      <button
-        key={c.id}
-        onClick={() => setSelected(c.id)}
-        className={`w-full rounded-lg border p-3 text-left transition ${
-          selected === c.id ? "border-slate-900 bg-white shadow-md" : "border-slate-200 bg-white/70 hover:border-slate-400"
-        }`}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-slate-900">{c.name}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.tone}`}>{badge.text}</span>
-        </div>
-      </button>
-    );
-  };
+  const mcpText =
+    mcpMode === "fastmcp"
+      ? "Active right now (FastMCP session)."
+      : mcpMode === "direct"
+        ? "Active right now (direct fallback: the same functions called without the MCP session)."
+        : "Checking...";
 
   return (
-    <div className="grid gap-4 lg:grid-cols-12">
-      <div className="grid gap-4 lg:col-span-8 md:grid-cols-2">
-        <div className="rounded-xl bg-sky-50 p-4 ring-1 ring-sky-200">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-sky-900">Core Platform Harness</h2>
-          <p className="mt-1 text-xs text-sky-800">Stable. Governance and safety live here, not in the model.</p>
-          <div className="mt-3 space-y-2">{core.map(renderBox)}</div>
+    <div className="space-y-4">
+      <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+        <h2 className="text-lg font-semibold text-slate-900">How a run works, step by step</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          The AI proposes, plain code decides, and a human approves anything irreversible. Every step is recorded.
+        </p>
+
+        {/* Wide screens: a table. */}
+        <div className="mt-4 hidden overflow-hidden rounded-lg ring-1 ring-slate-200 md:block">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="px-3 py-2">#</th>
+                <th className="px-3 py-2">Step</th>
+                <th className="px-3 py-2">What happens</th>
+                <th className="px-3 py-2">Tooling</th>
+                <th className="px-3 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {STEPS.map((s) => (
+                <tr key={s.n} className="align-top">
+                  <td className="px-3 py-3 font-mono text-xs text-slate-500">{s.n}</td>
+                  <td className="px-3 py-3 font-semibold text-slate-900">{s.step}</td>
+                  <td className="px-3 py-3 text-slate-700">{s.what}</td>
+                  <td className="px-3 py-3 text-slate-700">{s.tooling}</td>
+                  <td className="px-3 py-3">
+                    <StatusTag status={s.status} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="rounded-xl bg-violet-50 p-4 ring-1 ring-violet-200">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-violet-900">Pluggable ML and Robotics Workcell</h2>
-          <p className="mt-1 text-xs text-violet-800">Swappable. Each part can be replaced without touching the harness.</p>
-          <div className="mt-3 space-y-2">{pluggable.map(renderBox)}</div>
-        </div>
+
+        {/* Phones: stacked cards. */}
+        <ul className="mt-4 space-y-2 md:hidden">
+          {STEPS.map((s) => (
+            <li key={s.n} className="rounded-lg border border-slate-200 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-slate-900">
+                  {s.n}. {s.step}
+                </span>
+                <StatusTag status={s.status} />
+              </div>
+              <p className="mt-1 text-sm text-slate-700">{s.what}</p>
+              <p className="mt-1 text-xs text-slate-500">{s.tooling}</p>
+            </li>
+          ))}
+        </ul>
+
+        <p className="mt-3 text-xs text-slate-500">
+          Mock means a stand-in with demo values. Simulated means the readings are generated, not measured. The gate, the
+          review pause, the receipts and the tracing are real.
+        </p>
       </div>
 
-      <aside className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200 lg:col-span-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">{active.name}</h2>
-          <span className="text-xs text-slate-500">{active.plane === "core" ? "Core harness" : "Pluggable"}</span>
+      <Collapsible title="What is MCP?">
+        <p>
+          MCP (Model Context Protocol) is a standard way for the planner to call tools. Think of a USB standard for AI
+          tools: the planner asks for a tool by name, and any tool that follows the standard plugs in. That lets me swap the
+          mock optimizer for a real one without changing the planner.
+        </p>
+        <p className="mt-2">
+          A tool is a function the model can ask the system to run, such as looking up past failed runs. It is not another
+          model. In this build, MCP is {mcpText}
+        </p>
+      </Collapsible>
+
+      <Collapsible title="Why use an LLM at all, and not just the optimizer?">
+        <p>
+          A Bayesian optimizer is excellent at tuning numbers inside a defined space. It cannot read a paper or decide to try
+          a different processing route because the literature suggests it. The LLM reasons about what to try and why, and
+          widens the search space. The optimizer then does the math inside it.
+        </p>
+      </Collapsible>
+
+      <Collapsible title="Demo vs. real life">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="py-1 pr-3"></th>
+                <th className="py-1 pr-3">This demo</th>
+                <th className="py-1">Real lab</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {[
+                ["LLM input", "Goal and run history", "Plus literature, lab schedule and past scientist notes"],
+                ["LLM tools", "One: propose ratios", "Several: literature search, failure lookup, optimizer"],
+                ["LLM output", "Element set and route", "Plus a rationale a scientist can read"],
+                ["Risk model", "Hard-coded lookup", "A trained model"],
+                ["Planner mode", "Mock, no LLM call", "The LLM runs every batch"],
+                ["Workcell", "Simulated readings", "Robots, SEM and XRD instruments"],
+              ].map(([k, a, b]) => (
+                <tr key={k}>
+                  <td className="py-2 pr-3 font-medium text-slate-900">{k}</td>
+                  <td className="py-2 pr-3">{a}</td>
+                  <td className="py-2">{b}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <p className="mt-3 text-sm text-slate-700">{active.detail}</p>
-        <p className="mt-4 text-xs text-slate-500">Click any component to see what it does and whether it is built yet.</p>
-      </aside>
+      </Collapsible>
     </div>
   );
 }
