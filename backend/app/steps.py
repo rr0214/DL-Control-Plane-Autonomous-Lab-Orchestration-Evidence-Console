@@ -29,10 +29,10 @@ LOOP: list[dict] = [
         "n": 2,
         "step": "Literature suggests directions",
         "what": "A literature agent reads references and suggests directions.",
-        "tooling": "Today: a plain lookup in a curated file (MCP tool search_calphad_literature). The LLM agent is not built yet.",
+        "tooling": "Code retrieves references (MCP tool search_calphad_literature); Claude suggests directions and may cite only those. No API key: plain lookup, no directions.",
         "type": "LLM",
         "mock": False,
-        "status": "Planned",
+        "status": "Partly built",
     },
     {
         "n": 3,
@@ -121,8 +121,10 @@ LOOP: list[dict] = [
 # "node." prefix is stripped before lookup so the in-app span inspector names match too.
 _SPAN_LABELS: dict[str, tuple[str, int | None, bool]] = {
     "campaign.plan": ("code", None, False),
-    "retrieve_context": ("code", 2, False),
+    "retrieve_context": ("LLM", 2, False),  # live span sets is_mock when there was no real LLM call
     "propose_candidates": ("LLM", 3, False),  # live span also sets is_mock when the plan came from the mock
+    "llm.literature": ("LLM", 2, False),
+    "llm.planner": ("LLM", 3, False),
     "bayesian_optimizer": ("ML", 4, True),
     "policy_kernel": ("code", 5, False),
     "policy.check": ("code", 5, False),

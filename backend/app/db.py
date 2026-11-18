@@ -173,6 +173,21 @@ def list_samples(conn: sqlite3.Connection, campaign_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def plan_usage(conn: sqlite3.Connection, campaign_id: str) -> list[dict]:
+    """Per-plan LLM usage records, newest first. Plans from before usage tracking come back with no records."""
+    out = []
+    for r in conn.execute(
+        "SELECT thread_id, llm_mode, created_at, summary_json FROM plans WHERE campaign_id = ? ORDER BY created_at DESC",
+        (campaign_id,),
+    ):
+        try:
+            records = json.loads(r["summary_json"]).get("llm_usage", [])
+        except ValueError:
+            records = []
+        out.append({"thread_id": r["thread_id"], "llm_mode": r["llm_mode"], "created_at": r["created_at"], "records": records})
+    return out
+
+
 def list_plans(conn: sqlite3.Connection, campaign_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT thread_id, status, llm_mode, created_at, updated_at FROM plans "

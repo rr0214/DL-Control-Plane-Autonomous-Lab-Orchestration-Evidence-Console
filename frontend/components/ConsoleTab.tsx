@@ -240,6 +240,24 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
             ))}
             {literature.length === 0 && <li className="text-xs text-slate-500">Loading references...</li>}
           </ul>
+          {plan && (
+            <div className="mt-3 border-t border-slate-200 pt-2 text-xs text-slate-700">
+              <div className="mb-1 flex items-center gap-2 font-semibold text-slate-800">
+                Suggested directions <TypeChip type="LLM" mock={plan.literature_mode === "mock"} />
+              </div>
+              {(plan.directions ?? []).length > 0 ? (
+                <ul className="list-disc space-y-1 pl-4">
+                  {(plan.directions ?? []).map((d) => (
+                    <li key={d.direction}>
+                      {d.direction} <span className="text-slate-400">[{d.cited_ids.join(", ")}]</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-slate-500">None. Without an API key this step is a plain lookup.</p>
+              )}
+            </div>
+          )}
         </Collapsible>
 
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -257,6 +275,13 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
           {plan && (
             <p className="mt-2 text-xs text-slate-500">
               Mode: <span className="font-medium text-slate-700">{plan.llm_mode}</span>
+            </p>
+          )}
+          {plan?.llm_totals && plan.llm_totals.calls > 0 && (
+            <p className="mt-1 text-xs text-slate-500">
+              {plan.llm_totals.calls} LLM calls · {(plan.llm_totals.input_tokens + plan.llm_totals.output_tokens).toLocaleString()} tokens ·{" "}
+              {plan.llm_totals.cost_usd === null ? "cost n/a" : `$${plan.llm_totals.cost_usd.toFixed(4)}`} ·{" "}
+              {(plan.llm_totals.latency_ms / 1000).toFixed(1)}s
             </p>
           )}
           <ul className="mt-3 space-y-2">

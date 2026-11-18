@@ -41,9 +41,30 @@ const METHOD: { step: string; today: string; next: string }[] = [
 
 const pct = (t: number) => t.toFixed(2);
 
+type UsageRow = {
+  thread_id: string;
+  llm_mode: string | null;
+  created_at: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number | null;
+  latency_ms: number;
+  models: string[];
+};
+type Usage = {
+  plans: UsageRow[];
+  real_plans: number;
+  mock_plans: number;
+  avg_cost_usd: number | null;
+  avg_latency_ms: number | null;
+  price_note: string;
+};
+
 export default function EvalsTab() {
   const [data, setData] = useState<Summary | null>(null);
   const [error, setError] = useState(false);
+  const [usage, setUsage] = useState<Usage | null>(null);
 
   useEffect(() => {
     fetch(`${API}/api/evals/summary`, { cache: "no-store" })
@@ -53,6 +74,10 @@ export default function EvalsTab() {
       })
       .then((b: Summary) => setData(b))
       .catch(() => setError(true));
+    fetch(`${API}/api/usage/summary`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b: Usage | null) => setUsage(b))
+      .catch(() => setUsage(null));
   }, []);
 
   const base = data?.runs[0];
@@ -149,6 +174,62 @@ export default function EvalsTab() {
             </div>
           </>
         )}
+      </div>
+
+      <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+        <h2 className="text-lg font-semibold text-slate-900">Cost and latency per plan</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Measured from real LLM calls only. A mock plan makes no calls and costs nothing.
+        </p>
+        {!usage || usage.real_plans === 0 ? (
+          <p className="mt-3 text-sm text-slate-600">
+            No real LLM plan yet ({usage?.mock_plans ?? 0} mock). Set an API key and run Plan next batch.
+          </p>
+        ) : (
+          <>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+                <div className="text-xs text-slate-600">Average cost per plan ({usage.real_plans} real)</div>
+                <div className="mt-1 text-3xl font-semibold text-slate-900">
+                  {usage.avg_cost_usd === null ? "n/a" : `$${usage.avg_cost_usd.toFixed(4)}`}
+                </div>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+                <div className="text-xs text-slate-600">Average LLM time per plan</div>
+                <div className="mt-1 text-3xl font-semibold text-slate-900">
+                  {((usage.avg_latency_ms ?? 0) / 1000).toFixed(1)}s
+                </div>
+              </div>
+            </div>
+            <table className="mt-3 w-full text-left text-xs">
+              <thead className="uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="py-1 pr-3">Plan</th>
+                  <th className="py-1 pr-3">Calls</th>
+                  <th className="py-1 pr-3">Tokens in / out</th>
+                  <th className="py-1 pr-3">Cost</th>
+                  <th className="py-1">LLM time</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {usage.plans
+                  .filter((p) => p.calls > 0)
+                  .map((p) => (
+                    <tr key={p.thread_id}>
+                      <td className="py-1 pr-3 font-mono">{p.thread_id}</td>
+                      <td className="py-1 pr-3">{p.calls}</td>
+                      <td className="py-1 pr-3">
+                        {p.input_tokens.toLocaleString()} / {p.output_tokens.toLocaleString()}
+                      </td>
+                      <td className="py-1 pr-3">{p.cost_usd === null ? "n/a" : `$${p.cost_usd.toFixed(4)}`}</td>
+                      <td className="py-1">{(p.latency_ms / 1000).toFixed(1)}s</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </>
+        )}
+        <p className="mt-3 text-[11px] text-amber-800">{usage?.price_note ?? "Prices are set by hand. Verify against current pricing."}</p>
       </div>
 
       <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">

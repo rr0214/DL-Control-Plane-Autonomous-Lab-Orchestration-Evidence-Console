@@ -8,7 +8,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import db, run_evals, seed_camp014, steps, telemetry
+from . import db, llm_usage, run_evals, seed_camp014, steps, telemetry
 from .mcp_server import gateway
 from .orchestrator import CampaignOrchestrator
 from .targets import CustomerTargets
@@ -77,6 +77,30 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
     def loop() -> dict:
         """The 11-step target loop with each step's type (LLM, ML, code, person) and build status."""
         return {"steps": steps.loop()}
+
+    @app.get("/api/usage/summary")
+    def usage_summary() -> dict:
+        """Cost and latency of real LLM calls, per plan and averaged. Mock plans make no calls and cost nothing."""
+        conn = db.connect()
+        try:
+            plans = db.plan_usage(conn, "CAMP-014")
+        finally:
+            conn.close()
+        rows = [
+            {"thread_id": p["thread_id"], "llm_mode": p["llm_mode"], "created_at": p["created_at"], **llm_usage.totals(p["records"])}
+            for p in plans
+        ]
+        real = [r for r in rows if r["calls"] > 0]
+        priced = [r for r in real if r["cost_usd"] is not None]
+        return {
+            "plans": rows[:20],
+            "real_plans": len(real),
+            "mock_plans": len(rows) - len(real),
+            "avg_cost_usd": round(sum(r["cost_usd"] for r in priced) / len(priced), 6) if priced else None,
+            "avg_latency_ms": round(sum(r["latency_ms"] for r in real) / len(real), 1) if real else None,
+            "prices_usd_per_mtok": llm_usage.PRICES_USD_PER_MTOK,
+            "price_note": llm_usage.PRICE_NOTE,
+        }
 
     @app.get("/api/evals/summary")
     def evals_summary() -> dict:

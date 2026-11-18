@@ -14,11 +14,13 @@ import json
 from typing import Callable
 
 from .chemistry import normalize_composition, normalize_processing
-from .config import anthropic_key, anthropic_model
+from . import llm_usage
+from .config import agent_model, anthropic_key
 from .optimizer import TOOL_SCHEMA
 from .targets import describe as describe_targets
 
 MAX_LLM_CANDIDATES = 1
+PROMPT_VERSION = "planner-v2"
 
 # (elements, processing) routes. Each probe is resolved to ratios by the propose tool.
 BOUNDARY_PROBES = [
@@ -33,7 +35,7 @@ SYSTEM_PROMPT = (
     "You are the campaign planner for an autonomous materials lab. You never write "
     "stoichiometry yourself. To propose a composition you call the propose_alloy_ratios tool "
     "with an element set and a processing route, and you may only use the ratios it returns. "
-    "Make one tool call. Explore a new composition: do not use the restricted element Hf and "
+    "Make one tool call and ask for n=3 so there are alternatives. Explore a new composition: do not use the restricted element Hf and "
     "do not repeat a prior run. The policy team adds its own boundary and control checks, "
     "so do not try to include them. Keep any text reply to one sentence."
 )
@@ -64,7 +66,14 @@ def _route_rows(call: ToolCall, elements: list[str], processing: str, origin: st
 
 
 def _propose_anthropic(
-    goal: str, history: list[dict], key: str, call: ToolCall, calls: list[dict], targets: dict | None = None
+    goal: str,
+    history: list[dict],
+    key: str,
+    call: ToolCall,
+    calls: list[dict],
+    targets: dict | None = None,
+    directions: list[dict] | None = None,
+    usage: list[dict] | None = None,
 ) -> tuple[list[dict], int]:
     import anthropic
 
@@ -72,22 +81,29 @@ def _propose_anthropic(
     prior = "\n".join(
         f"- {r['run_id']}: {r['composition']} via {r['processing']} -> {r['outcome']}" for r in history
     )
+    lit = "\n".join(f"- {d['direction']}" for d in directions or [])
+    lit_block = f"Literature directions:\n{lit}\n" if lit else ""
     messages = [
         {
             "role": "user",
-            "content": f"Campaign goal: {goal}\n{describe_targets(targets)}\nPrior runs:\n{prior}\n\nPropose one new candidate route now.",
+            "content": f"Campaign goal: {goal}\n{describe_targets(targets)}\n{lit_block}Prior runs:\n{prior}\n\nPropose one new candidate route now.",
         }
     ]
     rows: list[dict] = []
     turns = 0
     for _ in range(3):
-        response = client.messages.create(
-            model=anthropic_model(),
+        response, record = llm_usage.call(
+            client,
+            agent="planner",
+            prompt_version=PROMPT_VERSION,
+            model=agent_model("planner"),
             max_tokens=1024,
             system=SYSTEM_PROMPT,
             tools=[TOOL_SCHEMA],
             messages=messages,
         )
+        if usage is not None:
+            usage.append(record)
         turns += 1
         messages.append({"role": "assistant", "content": response.content})
         uses = [block for block in response.content if block.type == "tool_use"]
@@ -109,38 +125,58 @@ def _propose_anthropic(
     return rows, turns
 
 
+def _key(row: dict) -> tuple[str, str]:
+    return normalize_composition(row["composition"]), normalize_processing(row["processing"])
+
+
 def propose(
-    goal: str, history: list[dict], call: ToolCall, targets: dict | None = None
+    goal: str,
+    history: list[dict],
+    call: ToolCall,
+    targets: dict | None = None,
+    directions: list[dict] | None = None,
+    usage: list[dict] | None = None,
 ) -> tuple[list[dict], str, str, list[dict]]:
-    """Returns (candidates, llm_mode, note, tool_calls). Controls are always included."""
+    """Returns (candidates, llm_mode, note, tool_calls). Controls are always included.
+
+    `usage` is an optional list that receives one record per real LLM call (tokens, cost, latency).
+    """
     calls: list[dict] = []
     probes: list[dict] = []
     for elements, processing in BOUNDARY_PROBES:
         probes.extend(_route_rows(call, elements, processing, "boundary_probe", calls))
     control = _route_rows(call, *YELLOW_CONTROL, "yellow_control", calls)
     fixed = probes + control
-    fixed_keys = {
-        (normalize_composition(r["composition"]), normalize_processing(r["processing"])) for r in fixed
-    }
 
     key = anthropic_key()
     if key:
+        model = agent_model("planner")
         try:
-            llm_rows, turns = _propose_anthropic(goal, history, key, call, calls, targets)
-            kept: list[dict] = []
-            seen = set(fixed_keys)
+            llm_rows, turns = _propose_anthropic(goal, history, key, call, calls, targets, directions, usage)
+            unique: list[dict] = []
+            seen: set = set()
             for row in llm_rows:
-                row_key = (normalize_composition(row["composition"]), normalize_processing(row["processing"]))
-                if row_key not in seen:  # drop anything the controls already cover
-                    seen.add(row_key)
-                    kept.append(row)
-            if kept:
+                if _key(row) not in seen:
+                    seen.add(_key(row))
+                    unique.append(row)
+            # Prefer a recipe that is new to both the history and the fixed controls.
+            known = {_key(r) for r in fixed} | {_key(r) for r in history}
+            chosen = [r for r in unique if _key(r) not in known][:MAX_LLM_CANDIDATES]
+            if not chosen:
+                # Never drop the planner's pick silently: if it repeats something, the Policy Kernel blocks it
+                # and the trace shows it. A control it duplicates is removed so the recipe is not doubled.
+                chosen = unique[:MAX_LLM_CANDIDATES]
+            if chosen:
+                chosen_keys = {_key(r) for r in chosen}
+                rest = [r for r in fixed if _key(r) not in chosen_keys]
+                pick = chosen[0]
                 note = (
-                    f"Claude ({anthropic_model()}) made {turns} tool-calling turn(s); ratios came from "
-                    "propose_alloy_ratios; boundary probes and Yellow control appended"
+                    f"Claude ({model}) proposed {pick['composition']} via {pick['processing']} "
+                    f"after {turns} tool-calling turn(s); ratios came from propose_alloy_ratios; "
+                    "boundary probes and Yellow control appended"
                 )
-                return _number(kept[:MAX_LLM_CANDIDATES] + fixed), "anthropic", note, calls
-            fallback_note = "Claude made no usable tool calls; used mock plan"
+                return _number(chosen + rest), "anthropic", note, calls
+            fallback_note = f"Claude ({model}) made no usable tool call; used mock plan"
         except Exception as exc:  # network, auth, or SDK errors fall back to the mock
             fallback_note = f"Anthropic call failed ({type(exc).__name__}); used mock plan"
     else:

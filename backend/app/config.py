@@ -24,4 +24,17 @@ def anthropic_key() -> str:
 
 
 def anthropic_model() -> str:
-    return os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
+    """Kept for callers that predate per-agent settings. Prefer agent_model(agent)."""
+    return os.getenv("ANTHROPIC_MODEL", "").strip() or DEFAULT_MODEL
+
+
+# Per-agent model choice. Each agent reads its own setting, then ANTHROPIC_MODEL, then the default.
+# Example: SDL_MODEL_PLANNER=claude-opus-5-5 to try a bigger planner while the others stay on Sonnet.
+DEFAULT_MODEL = "claude-sonnet-5-5"
+AGENTS = ("planner", "literature", "diagnosis")
+
+
+def agent_model(agent: str) -> str:
+    if agent not in AGENTS:
+        raise ValueError(f"unknown agent {agent!r}; expected one of {AGENTS}")
+    return os.getenv(f"SDL_MODEL_{agent.upper()}", "").strip() or os.getenv("ANTHROPIC_MODEL", "").strip() or DEFAULT_MODEL

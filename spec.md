@@ -11,7 +11,7 @@ The order of steps is fixed in code (a LangGraph graph with fixed edges). Agents
 | # | Step | Type | Status |
 |---|------|------|--------|
 | 1 | Customer targets in | person | Built |
-| 2 | Literature suggests directions | LLM | Planned [S2]. Today a plain lookup in a curated file |
+| 2 | Literature suggests directions | LLM | Partly built. Real Claude call when an API key is set; otherwise a plain lookup with no directions |
 | 3 | Planner proposes recipes | LLM | Partly built. Real Claude call when an API key is set, otherwise a mock plan |
 | 4 | Optimizer picks exact ratios | ML | Mock (fixed table, not a trained model) |
 | 5 | Safety check | code | Built (Policy Kernel) |
@@ -30,12 +30,13 @@ The same list is served by `GET /api/loop` (source: `backend/app/steps.py`) and 
 - **Can:** read the campaign goal, the customer targets and prior runs; choose an element set and a processing route; call the ratio optimizer tool.
 - **Cannot:** write composition percentages itself (the optimizer sets them); skip or reorder steps; call any tool other than the optimizer; see or change policy rules; approve anything.
 - **Output:** candidate recipes. Each is checked by code before it goes anywhere.
-- **Without an API key:** a fixed mock plan, labeled `mock` in the UI and in the run note.
+- **Its pick is kept.** If the planner proposes something that repeats a failed run, the Policy Kernel blocks it and the trace shows it; the pick is never silently replaced.
+- **Without an API key, or if the call fails:** a fixed mock plan, labeled `mock` in the UI and in the run note. When Claude made the proposal the run note says so, with the model name.
 
-### Literature agent (step 2, LLM) [S2, planned]
-- **Can:** read the curated reference list and suggest directions (element families, routes) with citations from that list.
-- **Cannot:** cite anything outside the list; propose a specific recipe; change targets.
-- **Without an API key:** the current lookup, labeled `mock`.
+### Literature agent (step 2, LLM)
+- **Can:** read the references that code retrieved from the curated list and suggest up to 3 directions (element additions, routes) with citations.
+- **Cannot:** cite anything that was not retrieved (code drops any direction without a valid citation); propose a specific recipe or percentages; change targets; call tools (code does the retrieval first, which is also cheaper and faster than a tool loop).
+- **Without an API key, or if the call fails:** a plain lookup, no directions, labeled `mock` in the UI and the run note.
 
 ### Diagnosis agent (step 10, LLM) [S4, planned]
 - **Can:** read the lineage for one sample (recipe, measurements, checks, similar prior runs) and propose exactly one action: `re-measure` or `hold`, with a reason, and say whether the likely cause is the instrument, the material or the model.
@@ -78,7 +79,13 @@ Every tool call is traced with its transport (`fastmcp` or `direct` fallback).
 
 The hafnium rule and the customer's "reduced hafnium" target are different things: the first is a hard block on the lab floor, the second is a property the customer asks for.
 
-## 6. What is not claimed
+## 6. Cost, latency and versions
+Every real LLM call is recorded: input and output tokens, model, cost, latency, prompt version and git commit. They appear on the trace span (`llm.planner`, `llm.literature`), in the plan result, and in the Evals tab ("Cost and latency per plan"). Mock plans make no calls and show zero.
+- Model per agent: `SDL_MODEL_PLANNER`, `SDL_MODEL_LITERATURE`, `SDL_MODEL_DIAGNOSIS`, else `ANTHROPIC_MODEL`, else `claude-sonnet-5-5`.
+- Prices are a hand-set table in `backend/app/llm_usage.py`. **Verify against current pricing** before quoting any cost. A model with no price shows cost "n/a", never a guess.
+- Prompt versions: `planner-v2`, `literature-v1`. Change the string when the prompt changes.
+
+## 7. What is not claimed
 - Shadow replay against historical data is not built and is not claimed anywhere.
 - Property measurements, the measurement check, the diagnosis agent and the release check are planned, not built.
 - All numeric risk, ductility and instrument values are demo data unless the UI says otherwise.

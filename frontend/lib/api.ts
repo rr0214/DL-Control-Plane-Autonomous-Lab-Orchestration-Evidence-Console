@@ -105,8 +105,22 @@ export type LoopStep = {
   status: "Built" | "Mock" | "Simulated" | "Partly built" | "Planned";
 };
 
+export type Direction = { direction: string; cited_ids: string[] };
+
+export type LlmTotals = {
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number | null;
+  latency_ms: number;
+  models: string[];
+};
+
 export type PlanResult = {
   targets?: Targets | null;
+  directions?: Direction[];
+  literature_mode?: string;
+  llm_totals?: LlmTotals;
   status: "paused" | "complete";
   thread_id: string;
   pending: Pending | null;

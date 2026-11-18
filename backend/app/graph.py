@@ -13,7 +13,7 @@ from langgraph.errors import GraphBubbleUp
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
-from . import db, policy_kernel, presynthesis, proposer, telemetry, workcell
+from . import db, literature, llm_usage, policy_kernel, presynthesis, proposer, telemetry, workcell
 from .mcp_server import gateway
 
 CAMPAIGN_ELEMENTS = ["Nb", "Ti", "Cr", "Al"]
@@ -26,6 +26,9 @@ class CampaignState(TypedDict, total=False):
     scope: dict[str, Any]
     history: list[dict[str, Any]]
     literature: list[dict[str, Any]]
+    directions: list[dict[str, Any]]
+    literature_mode: str
+    llm_usage: list[dict[str, Any]]
     llm_mode: str
     notes: list[str]
     tool_calls: list[dict[str, Any]]
@@ -46,8 +49,11 @@ def traced_node(name: str):
             ) as sp:
                 try:
                     result = fn(state)
+                    # A step that is an LLM step in the loop is a mock when no real LLM call happened.
                     if name == "propose_candidates":
                         sp.set_attribute("is_mock", result.get("llm_mode") == "mock")
+                    elif name == "retrieve_context":
+                        sp.set_attribute("is_mock", result.get("literature_mode") == "mock")
                     return result
                 except GraphBubbleUp:
                     sp.set_attribute("paused_for_review", True)
@@ -66,26 +72,36 @@ def retrieve_context(state: CampaignState) -> dict[str, Any]:
         history = db.get_runs(conn, state["campaign_id"])
     finally:
         conn.close()
-    lit, transport = gateway.call(
-        "search_calphad_literature", {"elements": CAMPAIGN_ELEMENTS, "topic": None, "limit": 3}
-    )
-    call = {"tool": "search_calphad_literature", "transport": transport, "args": {"elements": CAMPAIGN_ELEMENTS}}
+    # Targets passed in with the plan win; otherwise use the campaign's own.
+    targets = state.get("targets") or campaign["targets"]
+    lit = literature.run(campaign["goal"], targets, CAMPAIGN_ELEMENTS, gateway.call)
     return {
         "goal": campaign["goal"],
-        # Targets passed in with the plan win; otherwise use the campaign's own.
-        "targets": state.get("targets") or campaign["targets"],
+        "targets": targets,
         "scope": {"tenant": campaign["tenant"], "export_control": campaign["export_control"]},
         "history": history,
-        "literature": lit["results"],
-        "tool_calls": [*state.get("tool_calls", []), call],
-        "notes": [f"Loaded {len(history)} prior runs and {len(lit['results'])} literature references"],
+        "literature": lit["references"],
+        "directions": lit["directions"],
+        "literature_mode": lit["mode"],
+        "llm_usage": [*state.get("llm_usage", []), *lit["usage"]],
+        "tool_calls": [*state.get("tool_calls", []), *lit["tool_calls"]],
+        "notes": [f"Loaded {len(history)} prior runs and {len(lit['references'])} literature references", lit["note"]],
     }
 
 
 @traced_node("propose_candidates")
 def propose_candidates(state: CampaignState) -> dict[str, Any]:
-    candidates, mode, note, calls = proposer.propose(state["goal"], state["history"], gateway.call, targets=state.get("targets"))
+    usage: list[dict] = []
+    candidates, mode, note, calls = proposer.propose(
+        state["goal"],
+        state["history"],
+        gateway.call,
+        targets=state.get("targets"),
+        directions=state.get("directions"),
+        usage=usage,
+    )
     return {
+        "llm_usage": [*state.get("llm_usage", []), *usage],
         "candidates": candidates,
         "llm_mode": mode,
         "notes": [*state.get("notes", []), note],

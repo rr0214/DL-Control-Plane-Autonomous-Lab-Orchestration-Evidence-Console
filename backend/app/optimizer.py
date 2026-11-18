@@ -14,6 +14,12 @@ ALLOWED_PROCESSING = ("Arc-Melt", "Additive/Anneal")
 SURROGATE_TABLE = [
     {"composition": "Nb50-Ti20-Cr15-Al15", "expected_improvement": 0.92},
     {"composition": "Nb40-Ti25-Hf15-Al20", "expected_improvement": 0.88},
+    # Added in S2 so a planner pick is rarely a repeat of the fixed controls. Mock values, no Hf.
+    {"composition": "Nb45-Ti25-Cr20-Al10", "expected_improvement": 0.90},
+    {"composition": "Nb42-Ti28-Cr18-Al12", "expected_improvement": 0.87},
+    {"composition": "Nb46-Ti24-Cr17-Al13", "expected_improvement": 0.85},
+    {"composition": "Nb44-Ti24-Cr16-Al12-Si4", "expected_improvement": 0.86},
+    {"composition": "Nb40-Ti22-Cr14-Al12-Mo12", "expected_improvement": 0.83},
 ]
 
 
@@ -29,7 +35,7 @@ def bayesian_optimizer(elements: list[str], processing: str, n: int = 3) -> dict
     rows.sort(key=lambda r: r["expected_improvement"], reverse=True)
     return {
         "tool": "bayesian_optimizer",
-        "backend": "mock-surrogate-v0",
+        "backend": "mock-surrogate-v1",
         "processing": processing,
         "candidates": [dict(r) for r in rows[:n]],
     }

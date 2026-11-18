@@ -9,7 +9,7 @@ from pathlib import Path
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
-from . import telemetry
+from . import llm_usage, telemetry
 from .config import checkpoint_path
 from .graph import build_graph
 from .mcp_server import gateway
@@ -31,6 +31,10 @@ class CampaignOrchestrator:
             out = self.graph.invoke({"campaign_id": campaign_id, "targets": targets}, config)
             summary = self._summarize(thread_id, config, out)
             sp.set_attribute("status", summary["status"])
+            sp.set_attribute("git_commit", llm_usage.git_commit())
+            sp.set_attribute("llm_calls", summary["llm_totals"]["calls"])
+            if summary["llm_totals"]["cost_usd"] is not None:
+                sp.set_attribute("llm_cost_usd", summary["llm_totals"]["cost_usd"])
             sp.set_attribute("targets", json.dumps(summary.get("targets") or {}))
             sp.set_attribute("blocked_count", sum(1 for v in summary["verdicts"] if not v["allowed"]))
             return summary
@@ -65,6 +69,10 @@ class CampaignOrchestrator:
             "approved": values.get("approved", []),
             "triage": values.get("triage", []),
             "literature": values.get("literature", []),
+            "directions": values.get("directions", []),
+            "literature_mode": values.get("literature_mode"),
+            "llm_usage": values.get("llm_usage", []),
+            "llm_totals": llm_usage.totals(values.get("llm_usage", [])),
             "tool_calls": values.get("tool_calls", []),
         }
 
