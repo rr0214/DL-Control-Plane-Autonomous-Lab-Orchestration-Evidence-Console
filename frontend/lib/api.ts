@@ -33,6 +33,31 @@ export type MeasurementCheck = {
   similar: string[];
 };
 
+// What the diagnosis agent proposed and what the code gate did with it. Never executed in this prototype.
+export type Diagnosis = {
+  mode: "anthropic" | "mock";
+  executed: boolean;
+  gate: {
+    allowed: boolean;
+    final_action: "re-measure" | "hold";
+    rule: string | null;
+    detail: string;
+    proposal: { action?: string; cause?: string; reason?: string };
+  };
+};
+
+export type ActionRow = {
+  action_id: string;
+  thread_id: string;
+  sample_id: string;
+  final_action: string;
+  mode: string;
+  executed: boolean;
+  created_at: string;
+  proposed: { action?: string; cause?: string; reason?: string };
+  gate: { allowed: boolean; final_action: string; rule: string | null; detail: string };
+};
+
 export type Telemetry = {
   sem_cv_confidence: number;
   xrd_phase_match: number;
@@ -74,6 +99,7 @@ export type TriageRecord = {
   telemetry: Telemetry | null; // null when the recipe was held and never synthesized
   measurements?: Measurements | null;
   measurement_check?: MeasurementCheck | null;
+  diagnosis?: Diagnosis;
   risk?: Risk;
   follow_up?: string | null;
   decision: string | null;
@@ -187,6 +213,7 @@ export type CampaignView = {
   };
   seed_samples: SampleRecord[];
   live_samples: SampleRecord[];
+  actions?: ActionRow[];
   plans: { thread_id: string; status: string; llm_mode: string | null; created_at: string }[];
   seed_trace: Trace;
   literature: Literature[];

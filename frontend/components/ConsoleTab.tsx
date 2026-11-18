@@ -464,6 +464,25 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                     <div className="font-mono text-base text-slate-900">{t.composition}</div>
                     <div className="text-sm text-slate-500">{t.processing}</div>
                     {t.follow_up && <div className="mt-1 max-w-md text-xs text-slate-500">{t.follow_up}</div>}
+                    {t.diagnosis && (
+                      <div className="mt-1 max-w-md rounded bg-slate-50 p-1.5 text-xs text-slate-700 ring-1 ring-slate-200">
+                        <TypeChip type="LLM" mock={t.diagnosis.mode === "mock"} /> Diagnosis proposed{" "}
+                        <span className="font-medium">{t.diagnosis.gate.proposal.action ?? "nothing valid"}</span>
+                        {t.diagnosis.gate.proposal.cause && <> (likely {t.diagnosis.gate.proposal.cause})</>}
+                        {t.diagnosis.gate.proposal.reason && <div className="text-slate-500">{t.diagnosis.gate.proposal.reason}</div>}
+                        <div className="mt-0.5">
+                          <TypeChip type="code" /> Gate:{" "}
+                          {t.diagnosis.gate.allowed ? (
+                            <span className="font-medium text-emerald-700">allowed, {t.diagnosis.gate.final_action}</span>
+                          ) : (
+                            <span className="font-medium text-amber-800">
+                              overrode to {t.diagnosis.gate.final_action} ({t.diagnosis.gate.rule})
+                            </span>
+                          )}{" "}
+                          · logged, not executed
+                        </div>
+                      </div>
+                    )}
                     {t.measurements && (
                       <div className="mt-1 max-w-md text-xs text-slate-600">
                         <span className="mr-1 rounded bg-amber-100 px-1 text-[10px] font-medium uppercase text-amber-900">mock</span>
@@ -537,6 +556,25 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
             <p className="mt-2 text-xs text-slate-500">Select a sample in the triage queue to see its receipt.</p>
           )}
         </div>
+
+        <Collapsible title="Actions log" badge={<Pill tone="slate">{campaign?.actions?.length ?? 0}</Pill>}>
+          {(campaign?.actions ?? []).length === 0 ? (
+            <p className="text-xs text-slate-500">No actions yet. A Yellow or Red sample that was made gets a diagnosis.</p>
+          ) : (
+            <ul className="space-y-2">
+              {(campaign?.actions ?? []).map((a) => (
+                <li key={a.action_id} className="text-xs text-slate-700">
+                  <span className="font-mono">{a.sample_id}</span>: <span className="font-medium">{a.final_action}</span>
+                  {a.gate.allowed ? "" : ` (gate overrode ${a.proposed.action ?? "proposal"}: ${a.gate.rule})`}
+                  <div className="text-slate-500">
+                    {a.mode === "mock" ? "mock stand-in" : "Claude"} · {a.executed ? "executed" : "not executed (simulated)"} ·{" "}
+                    {a.proposed.cause ? `likely ${a.proposed.cause}` : "no valid cause"}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Collapsible>
 
         <Collapsible title="Span inspector">
           <div className="flex flex-wrap items-center justify-between gap-2">

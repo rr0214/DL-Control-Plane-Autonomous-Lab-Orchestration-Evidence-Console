@@ -34,6 +34,18 @@ CREATE TABLE IF NOT EXISTS plans (
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS actions (
+    action_id    TEXT PRIMARY KEY,
+    thread_id    TEXT NOT NULL,
+    campaign_id  TEXT NOT NULL,
+    sample_id    TEXT NOT NULL,
+    proposed_json TEXT NOT NULL,
+    gate_json    TEXT NOT NULL,
+    final_action TEXT NOT NULL,
+    mode         TEXT NOT NULL,
+    executed     INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS samples (
     sample_id      TEXT PRIMARY KEY,
     thread_id      TEXT NOT NULL,
@@ -156,6 +168,45 @@ def save_sample(conn: sqlite3.Connection, thread_id: str, campaign_id: str, reco
     conn.commit()
 
 
+def save_action(conn: sqlite3.Connection, thread_id: str, campaign_id: str, sample_id: str, diagnosis: dict) -> None:
+    """Append-only log of what the diagnosis agent proposed and what the gate did with it. Nothing is executed:
+    `executed` stays 0 until a real workcell is wired in."""
+    conn.execute(
+        "INSERT INTO actions (action_id, thread_id, campaign_id, sample_id, proposed_json, gate_json, final_action, mode, executed, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?) ON CONFLICT(action_id) DO NOTHING",
+        (
+            f"ACT-{thread_id}-{sample_id}",
+            thread_id,
+            campaign_id,
+            sample_id,
+            json.dumps(diagnosis["gate"]["proposal"]),
+            json.dumps({k: diagnosis["gate"][k] for k in ("allowed", "final_action", "rule", "detail")}),
+            diagnosis["gate"]["final_action"],
+            diagnosis["mode"],
+            _now(),
+        ),
+    )
+    conn.commit()
+
+
+def count_remeasures(conn: sqlite3.Connection, thread_id: str, sample_id: str) -> int:
+    """Earlier re-measure actions for this sample in this plan. (Sample ids repeat across plans, so the plan is part of the key.)"""
+    return conn.execute(
+        "SELECT COUNT(*) FROM actions WHERE thread_id = ? AND sample_id = ? AND final_action = 're-measure'", (thread_id, sample_id)
+    ).fetchone()[0]
+
+
+def list_actions(conn: sqlite3.Connection, campaign_id: str) -> list[dict]:
+    out = []
+    for r in conn.execute("SELECT * FROM actions WHERE campaign_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 50", (campaign_id,)):
+        row = dict(r)
+        row["proposed"] = json.loads(row.pop("proposed_json"))
+        row["gate"] = json.loads(row.pop("gate_json"))
+        row["executed"] = bool(row["executed"])
+        out.append(row)
+    return out
+
+
 def clear_campaign_lineage(conn: sqlite3.Connection, campaign_id: str) -> list[str]:
     """Delete plans and samples for one campaign. Returns the thread IDs that were removed.
 
@@ -166,6 +217,7 @@ def clear_campaign_lineage(conn: sqlite3.Connection, campaign_id: str) -> list[s
         for r in conn.execute("SELECT thread_id FROM plans WHERE campaign_id = ?", (campaign_id,)).fetchall()
     ]
     conn.execute("DELETE FROM samples WHERE campaign_id = ?", (campaign_id,))
+    conn.execute("DELETE FROM actions WHERE campaign_id = ?", (campaign_id,))
     conn.execute("DELETE FROM plans WHERE campaign_id = ?", (campaign_id,))
     conn.commit()
     return thread_ids

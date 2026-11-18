@@ -13,7 +13,7 @@ from langgraph.errors import GraphBubbleUp
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
-from . import check, db, history, literature, measure, policy_kernel, presynthesis, proposer, telemetry, workcell
+from . import action_gate, check, db, diagnosis, history, literature, measure, policy_kernel, presynthesis, proposer, telemetry, workcell
 from .mcp_server import gateway
 
 CAMPAIGN_ELEMENTS = ["Nb", "Ti", "Cr", "Al"]
@@ -21,6 +21,7 @@ CAMPAIGN_ELEMENTS = ["Nb", "Ti", "Cr", "Al"]
 
 class CampaignState(TypedDict, total=False):
     campaign_id: str
+    thread_id: str
     goal: str
     targets: dict[str, Any]
     scope: dict[str, Any]
@@ -37,6 +38,7 @@ class CampaignState(TypedDict, total=False):
     verdicts: list[dict[str, Any]]
     approved: list[dict[str, Any]]
     triage: list[dict[str, Any]]
+    diagnosis_mode: str
 
 
 def traced_node(name: str):
@@ -53,6 +55,8 @@ def traced_node(name: str):
                     # A step that is an LLM step in the loop is a mock when no real LLM call happened.
                     if name == "propose_candidates":
                         sp.set_attribute("is_mock", result.get("llm_mode") == "mock")
+                    elif name == "diagnose_flagged":
+                        sp.set_attribute("is_mock", result.get("diagnosis_mode") == "mock")
                     elif name == "retrieve_context":
                         sp.set_attribute("is_mock", result.get("literature_mode") == "mock")
                     return result
@@ -254,15 +258,59 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
     return {"triage": triage}
 
 
+@traced_node("diagnose_flagged")
+def diagnose_flagged(state: CampaignState) -> dict[str, Any]:
+    """Loop step 10. For each sample that was made and came out Yellow or Red, the diagnosis agent proposes an
+    action and the action gate decides. Nothing is executed; the result is logged and shown."""
+    triage = [dict(r) for r in state.get("triage", [])]
+    usage: list[dict[str, Any]] = []
+    notes: list[str] = []
+    modes: list[str] = []
+    conn = db.connect()
+    try:
+        for rec in triage:
+            if rec.get("telemetry") is None or rec.get("status") not in ("Yellow", "Red") or rec.get("diagnosis"):
+                continue
+            result = diagnosis.propose(rec, state.get("references", []))
+            usage.extend(result["usage"])
+            modes.append(result["mode"])
+            prior = db.count_remeasures(conn, state.get("thread_id", ""), rec["sample_id"])
+            with telemetry.span("action.gate", campaign_id=state.get("campaign_id"), sample_id=rec["sample_id"]) as gsp:
+                verdict = action_gate.gate(result["proposal"], rec, prior)
+                gsp.set_attribute("allowed", verdict["allowed"])
+                gsp.set_attribute("final_action", verdict["final_action"])
+                gsp.set_attribute("rule", verdict["rule"] or "none")
+            rec["diagnosis"] = {"mode": result["mode"], "gate": verdict, "executed": False}
+            line = f"Diagnosis ({'Claude' if result['mode'] == 'anthropic' else 'mock'}): {verdict['final_action']}"
+            if verdict["proposal"].get("cause") in action_gate.CAUSES:
+                line += f", likely {verdict['proposal']['cause']}"
+            if not verdict["allowed"]:
+                line += f" (gate overrode the proposal: {verdict['rule']})"
+            rec["follow_up"] = f"{rec.get('follow_up') or ''} {line}. Logged, not executed.".strip()
+            notes.append(f"{rec['sample_id']}: {result['note']}")
+    finally:
+        conn.close()
+    if not modes:
+        return {}
+    return {
+        "triage": triage,
+        "diagnosis_mode": "anthropic" if "anthropic" in modes else "mock",
+        "llm_usage": [*state.get("llm_usage", []), *usage],
+        "notes": [*state.get("notes", []), *notes],
+    }
+
+
 def build_graph(checkpointer):
     graph = StateGraph(CampaignState)
     graph.add_node("retrieve_context", retrieve_context)
     graph.add_node("propose_candidates", propose_candidates)
     graph.add_node("policy_kernel", policy_kernel_node)
     graph.add_node("triage_and_hitl", triage_and_hitl)
+    graph.add_node("diagnose_flagged", diagnose_flagged)
     graph.add_edge(START, "retrieve_context")
     graph.add_edge("retrieve_context", "propose_candidates")
     graph.add_edge("propose_candidates", "policy_kernel")
     graph.add_edge("policy_kernel", "triage_and_hitl")
-    graph.add_edge("triage_and_hitl", END)
+    graph.add_edge("triage_and_hitl", "diagnose_flagged")
+    graph.add_edge("diagnose_flagged", END)
     return graph.compile(checkpointer=checkpointer)

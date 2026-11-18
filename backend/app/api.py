@@ -31,6 +31,8 @@ def _persist(conn, thread_id: str, campaign_id: str, out: dict) -> None:
     db.save_plan(conn, thread_id, campaign_id, out)
     for record in out["triage"]:
         db.save_sample(conn, thread_id, campaign_id, record)
+        if record.get("diagnosis"):
+            db.save_action(conn, thread_id, campaign_id, record["sample_id"], record["diagnosis"])
     if out["status"] == "paused" and out["pending"]:
         db.save_sample(conn, thread_id, campaign_id, out["pending"])
 
@@ -119,6 +121,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
                 sample["recorded_at"] = sample["updated_at"]
                 live.append(dict(sample, receipt=seed_camp014.make_receipt(sample)))
             plans = db.list_plans(conn, campaign_id)
+            actions = db.list_actions(conn, campaign_id)
         finally:
             conn.close()
         literature, _ = gateway.call("search_calphad_literature", {"elements": ["Nb", "Ti", "Cr", "Al"], "limit": 3})
@@ -128,6 +131,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
             "seed_samples": seed_camp014.SEED_SAMPLES,
             "live_samples": live,
             "plans": plans,
+            "actions": actions,
             "seed_trace": seed_camp014.SEED_TRACE,
             "literature": literature["results"],
             "mcp_mode": gateway.mode,

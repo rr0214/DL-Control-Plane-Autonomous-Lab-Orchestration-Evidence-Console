@@ -101,10 +101,10 @@ LOOP: list[dict] = [
         "n": 10,
         "step": "Diagnosis agent",
         "what": "An LLM proposes re-measure or hold, with a reason. A code gate approves the action.",
-        "tooling": "Not built yet.",
+        "tooling": "Claude reads one flagged sample's lineage and proposes re-measure or hold; a code gate decides. Actions are logged, not executed. No key: a rule-based stand-in.",
         "type": "LLM",
         "mock": False,
-        "status": "Planned",
+        "status": "Partly built",
     },
     {
         "n": 11,
@@ -133,6 +133,9 @@ _SPAN_LABELS: dict[str, tuple[str, int | None, bool]] = {
     "scientist.review": ("person", 6, False),
     "sample.triage": ("code", 9, True),
     "measure.sample": ("code", 8, True),
+    "diagnose_flagged": ("LLM", 10, False),  # live span sets is_mock when the stand-in proposed
+    "llm.diagnosis": ("LLM", 10, False),
+    "action.gate": ("code", 10, False),
     "measurement.check": ("code", 9, False),
     "mcp.search_calphad_literature": ("code", 2, False),
     "mcp.propose_alloy_ratios": ("ML", 4, True),

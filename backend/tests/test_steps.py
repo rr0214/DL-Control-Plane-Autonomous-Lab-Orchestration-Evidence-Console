@@ -25,8 +25,9 @@ def test_loop_types_match_the_design():
 def test_unbuilt_steps_are_not_marked_built():
     by_n = {s["n"]: s for s in steps.loop()}
     # Honesty check: these are not built yet and must not claim to be.
-    for n in (10, 11):
+    for n in (11,):
         assert by_n[n]["status"] == "Planned"
+    assert by_n[10]["status"] == "Partly built"  # real LLM with a mock fallback, actions only logged
     assert by_n[2]["status"] == "Partly built"  # real LLM with a mock fallback, not fully built
     assert by_n[4]["mock"] is True and by_n[7]["mock"] is True
 
