@@ -9,3 +9,8 @@ venv/
 node_modules/
 .next/
 *.tsbuildinfo
+
+# Eval skills installed by npx skills (local tooling, not part of the app)
+.agents/
+.claude/
+skills-lock.json

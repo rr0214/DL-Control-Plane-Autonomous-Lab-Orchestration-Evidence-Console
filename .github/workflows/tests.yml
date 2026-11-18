@@ -1,0 +1,26 @@
+name: tests
+
+# Runs the backend unit tests on every push.
+# Phoenix is not installed: tracing is forced off in tests, so the suite needs no Phoenix.
+on:
+  push:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install test dependencies
+        run: |
+          pip install fastapi uvicorn pydantic "langgraph>=0.2.60" "langgraph-checkpoint-sqlite>=2.0.0" \
+            anthropic python-dotenv httpx "mcp>=1.2" opentelemetry-sdk pytest
+      - name: Run tests
+        working-directory: backend
+        env:
+          SDL_TRACING: "off"
+        run: python -m pytest -q
