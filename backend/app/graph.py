@@ -13,7 +13,7 @@ from langgraph.errors import GraphBubbleUp
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
-from . import db, literature, llm_usage, policy_kernel, presynthesis, proposer, telemetry, workcell
+from . import check, db, history, literature, measure, policy_kernel, presynthesis, proposer, telemetry, workcell
 from .mcp_server import gateway
 
 CAMPAIGN_ELEMENTS = ["Nb", "Ti", "Cr", "Al"]
@@ -25,6 +25,7 @@ class CampaignState(TypedDict, total=False):
     targets: dict[str, Any]
     scope: dict[str, Any]
     history: list[dict[str, Any]]
+    references: list[dict[str, Any]]
     literature: list[dict[str, Any]]
     directions: list[dict[str, Any]]
     literature_mode: str
@@ -69,7 +70,9 @@ def retrieve_context(state: CampaignState) -> dict[str, Any]:
     conn = db.connect()
     try:
         campaign = db.get_campaign(conn, state["campaign_id"])
-        history = db.get_runs(conn, state["campaign_id"])
+        # Seed runs plus the last few decided samples, with the scientist's decision and notes.
+        prior = history.planner_history(conn, state["campaign_id"])
+        references = history.measurement_references(conn, state["campaign_id"])
     finally:
         conn.close()
     # Targets passed in with the plan win; otherwise use the campaign's own.
@@ -79,13 +82,14 @@ def retrieve_context(state: CampaignState) -> dict[str, Any]:
         "goal": campaign["goal"],
         "targets": targets,
         "scope": {"tenant": campaign["tenant"], "export_control": campaign["export_control"]},
-        "history": history,
+        "history": prior,
+        "references": references,
         "literature": lit["references"],
         "directions": lit["directions"],
         "literature_mode": lit["mode"],
         "llm_usage": [*state.get("llm_usage", []), *lit["usage"]],
         "tool_calls": [*state.get("tool_calls", []), *lit["tool_calls"]],
-        "notes": [f"Loaded {len(history)} prior runs and {len(lit['references'])} literature references", lit["note"]],
+        "notes": [f"Loaded {len(prior)} prior runs and {len(lit['references'])} literature references", lit["note"]],
     }
 
 
@@ -220,15 +224,32 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
             triage_status=status,
         ):
             pass
+        # Loop step 8: simulated property measurements. Step 9: the measurement check (plain code).
+        with telemetry.span("measure.sample", campaign_id=state.get("campaign_id"), candidate_id=cand["candidate_id"]) as msp:
+            measurements = measure.measure(cand["composition"], cand["processing"])
+            msp.set_attribute("hardness_hv", measurements["hardness_hv"])
+            msp.set_attribute("oxidation_mg_cm2", measurements["oxidation_mg_cm2"])
+        with telemetry.span("measurement.check", campaign_id=state.get("campaign_id"), candidate_id=cand["candidate_id"]) as csp:
+            result = check.run_checks(cand["composition"], measurements, state.get("references", []), record["sample_id"])
+            csp.set_attribute("flags", ",".join(result["flags"]) or "none")
+            csp.set_attribute("severity", result["severity"] or "none")
+            csp.set_attribute("similar_count", len(result["similar"]))
+        # The check can only make a sample's status worse, never better.
+        rank = {"Green": 0, "Yellow": 1, "Red": 2}
+        if result["severity"] and rank[result["severity"]] > rank[status]:
+            status = result["severity"]
         record["telemetry"] = telemetry_row
+        record["measurements"] = measurements
+        record["measurement_check"] = result
         record["status"] = status
         if record["decision"] is None:
             record["decision"] = {"Green": "auto_advance", "Red": "early_kill"}.get(status, "scan_flagged")
         if status != "Green":
             sem = telemetry_row["sem_cv_confidence"]
-            record["follow_up"] = (
-                f"Post-scan {status}: SEM confidence {sem:.2f}. Flagged for follow-up; it does not block the run."
-            )
+            why = f"SEM confidence {sem:.2f}"
+            if result["flags"]:
+                why += f"; measurement check flagged {', '.join(result['flags'])}"
+            record["follow_up"] = f"Post-scan {status}: {why}. Flagged for follow-up; it does not block the run."
         triage.append(record)
     return {"triage": triage}
 

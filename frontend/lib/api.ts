@@ -17,6 +17,22 @@ export type Verdict = {
   latency_ms: number;
 };
 
+// Simulated property measurements and the plain-code check on them (loop steps 8 and 9). Mock values.
+export type Measurements = {
+  mock: boolean;
+  instrument: string;
+  composition_at_pct: Record<string, number>;
+  hardness_hv: number;
+  oxidation_mg_cm2: number;
+};
+
+export type MeasurementCheck = {
+  checks: { rule: string; passed: boolean; detail: string; severity: string | null }[];
+  flags: string[];
+  severity: "Yellow" | "Red" | null;
+  similar: string[];
+};
+
 export type Telemetry = {
   sem_cv_confidence: number;
   xrd_phase_match: number;
@@ -56,6 +72,8 @@ export type TriageRecord = {
   processing: string;
   status: string;
   telemetry: Telemetry | null; // null when the recipe was held and never synthesized
+  measurements?: Measurements | null;
+  measurement_check?: MeasurementCheck | null;
   risk?: Risk;
   follow_up?: string | null;
   decision: string | null;
@@ -152,6 +170,8 @@ export type SampleRecord = {
   decision?: string | null;
   intuition_note?: string;
   telemetry?: Telemetry;
+  measurements?: Measurements | null;
+  measurement_check?: MeasurementCheck | null;
   recorded_at?: string;
   receipt: Receipt;
 };

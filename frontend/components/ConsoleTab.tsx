@@ -464,6 +464,32 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                     <div className="font-mono text-base text-slate-900">{t.composition}</div>
                     <div className="text-sm text-slate-500">{t.processing}</div>
                     {t.follow_up && <div className="mt-1 max-w-md text-xs text-slate-500">{t.follow_up}</div>}
+                    {t.measurements && (
+                      <div className="mt-1 max-w-md text-xs text-slate-600">
+                        <span className="mr-1 rounded bg-amber-100 px-1 text-[10px] font-medium uppercase text-amber-900">mock</span>
+                        Hardness {t.measurements.hardness_hv} HV · Oxidation {t.measurements.oxidation_mg_cm2} mg/cm² · Composition{" "}
+                        {Object.entries(t.measurements.composition_at_pct)
+                          .map(([el, v]) => `${el}${v}`)
+                          .join("-")}
+                        {t.measurement_check && (
+                          <div className="mt-0.5">
+                            Measurement check:{" "}
+                            {t.measurement_check.flags.length === 0 ? (
+                              <span className="font-medium text-emerald-700">passed</span>
+                            ) : (
+                              <span className="font-medium text-amber-800">{t.measurement_check.flags.join(", ")}</span>
+                            )}
+                            {t.measurement_check.checks
+                              .filter((k) => !k.passed)
+                              .map((k) => (
+                                <div key={k.rule} className="text-[11px] text-slate-500">
+                                  {k.rule}: {k.detail}
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <Pill tone={statusTone(t.status)}>{t.status}</Pill>

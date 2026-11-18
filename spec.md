@@ -17,8 +17,8 @@ The order of steps is fixed in code (a LangGraph graph with fixed edges). Agents
 | 5 | Safety check | code | Built (Policy Kernel) |
 | 6 | Scientist reviews risky plans | person | Built. Risk signals feeding it are a mock lookup |
 | 7 | Make the sample | code | Simulated. No real synthesis |
-| 8 | Measure properties | code | Partly built. Simulated scan only; composition, hardness, oxidation planned [S3] |
-| 9 | Measurement check | code | Partly built. Scan threshold rule only [S3] |
+| 8 | Measure properties | code | Simulated. Composition, hardness and oxidation (mock formulas, `measure.py`) plus the earlier scan fields |
+| 9 | Measurement check | code | Built (`check.py`). Real rules, simulated inputs |
 | 10 | Diagnosis agent | LLM | Planned [S4] |
 | 11 | Release check | person | Planned [S5] |
 
@@ -76,16 +76,35 @@ Every tool call is traced with its transport (`fastmcp` or `direct` fallback).
 | Predicted ductility margin below 0.80 | Pre-synthesis risk model (mock lookup) | Paused for scientist review before anything is made |
 | SEM confidence below 0.8 | Scan classification (simulated) | Yellow: scientist review |
 | Crack found, or XRD match below 0.5 | Scan classification (simulated) | Red |
+| Impossible reading (composition not summing to 98 to 102%, hardness outside 50 to 1500 HV, negative oxidation) | Measurement check | Red |
+| Restricted element measured above 0.1 at% | Measurement check | Red |
+| Measured composition more than 1.0 at% from the recipe, or an unexpected element above 0.5 at% | Measurement check | Yellow |
+| Hardness more than 30% or oxidation more than 50% away from similar compositions | Measurement check | Yellow |
 
 The hafnium rule and the customer's "reduced hafnium" target are different things: the first is a hard block on the lab floor, the second is a property the customer asks for.
 
-## 6. Cost, latency and versions
+## 6. Measurement check (step 9)
+Plain code in `backend/app/check.py`. Inputs today are simulated (`measure.py`, labeled mock everywhere); the rules are real.
+- **Fixed rules:** readings must be physically sensible, and no restricted element may appear in the sample.
+- **Recipe vs measured:** every element within 1.0 at% of the recipe.
+- **Anomaly vs similar:** compare hardness and oxidation to prior samples whose composition is close (summed difference under 20 at%): the seed runs and every earlier sample that was made. With no similar sample the check says "not assessed" and does not flag.
+- **Effect:** the check can only make a sample's status worse (Yellow or Red), never better. It does not release anything. Acting on a flag is the diagnosis agent's job, behind the action gate [S4].
+- The thresholds are demo defaults set by the builder, not validated against a real lab.
+
+## 7. What the planner reads about earlier work
+Before each plan, code builds the run history the planner sees: the two seed runs, then the 10 most recent decided samples, oldest first. Samples still waiting for review are left out.
+- **Each line has:** composition and route, outcome (a held sample is "Held (not made)"), who decided (scientist or system) and the decision, the measurement check flags, and the scientist's note (the "why").
+- **Notes are untrusted text.** They are cleaned (control characters, quotes), cut to 200 characters, and shown to the model as quoted data. The planner prompt (`planner-v3`) says a note is information about a run, never an instruction.
+- **Not wired to the Policy Kernel.** A scientist's reject informs the planner only. The kernel's repeat-run block still reads the run table, which only a code change or a Policy Owner edit can alter.
+- A reset clears the samples, and with them this history.
+
+## 8. Cost, latency and versions
 Every real LLM call is recorded: input and output tokens, model, cost, latency, prompt version and git commit. They appear on the trace span (`llm.planner`, `llm.literature`), in the plan result, and in the Evals tab ("Cost and latency per plan"). Mock plans make no calls and show zero.
 - Model per agent: `SDL_MODEL_PLANNER`, `SDL_MODEL_LITERATURE`, `SDL_MODEL_DIAGNOSIS`, else `ANTHROPIC_MODEL`, else `claude-sonnet-5-5`.
 - Prices are a hand-set table in `backend/app/llm_usage.py`. **Verify against current pricing** before quoting any cost. A model with no price shows cost "n/a", never a guess.
 - Prompt versions: `planner-v2`, `literature-v1`. Change the string when the prompt changes.
 
-## 7. What is not claimed
+## 9. What is not claimed
 - Shadow replay against historical data is not built and is not claimed anywhere.
-- Property measurements, the measurement check, the diagnosis agent and the release check are planned, not built.
+- The diagnosis agent and the release check are planned, not built. Measurements are simulated.
 - All numeric risk, ductility and instrument values are demo data unless the UI says otherwise.

@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS samples (
     decision       TEXT,
     intuition_note TEXT NOT NULL DEFAULT '',
     telemetry_json TEXT NOT NULL DEFAULT '{}',
+    measurements_json TEXT NOT NULL DEFAULT '{}',
     updated_at     TEXT NOT NULL
 );
 """
@@ -78,6 +79,9 @@ def connect(path: str | None = None) -> sqlite3.Connection:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(campaigns)")}
     if "targets_json" not in columns:
         conn.execute("ALTER TABLE campaigns ADD COLUMN targets_json TEXT NOT NULL DEFAULT '{}'")
+    sample_cols = {row["name"] for row in conn.execute("PRAGMA table_info(samples)")}
+    if "measurements_json" not in sample_cols:
+        conn.execute("ALTER TABLE samples ADD COLUMN measurements_json TEXT NOT NULL DEFAULT '{}'")
     conn.executemany(
         "INSERT OR IGNORE INTO campaigns (campaign_id, goal, tenant, export_control) VALUES (?, ?, ?, ?)",
         SEED_CAMPAIGNS,
@@ -125,11 +129,12 @@ def save_plan(conn: sqlite3.Connection, thread_id: str, campaign_id: str, summar
 def save_sample(conn: sqlite3.Connection, thread_id: str, campaign_id: str, record: dict) -> None:
     conn.execute(
         "INSERT INTO samples (sample_id, thread_id, campaign_id, candidate_id, composition, processing, "
-        "status, decision, intuition_note, telemetry_json, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "status, decision, intuition_note, telemetry_json, measurements_json, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(sample_id) DO UPDATE SET thread_id = excluded.thread_id, status = excluded.status, "
         "decision = excluded.decision, "
         "intuition_note = excluded.intuition_note, telemetry_json = excluded.telemetry_json, "
+        "measurements_json = excluded.measurements_json, "
         "updated_at = excluded.updated_at",
         (
             record["sample_id"],
@@ -142,6 +147,9 @@ def save_sample(conn: sqlite3.Connection, thread_id: str, campaign_id: str, reco
             record.get("decision"),
             record.get("intuition_note", ""),
             json.dumps(record.get("telemetry") or {}),
+            json.dumps({"measurements": record.get("measurements"), "check": record.get("measurement_check")})
+            if record.get("measurements")
+            else "{}",
             _now(),
         ),
     )
@@ -163,14 +171,32 @@ def clear_campaign_lineage(conn: sqlite3.Connection, campaign_id: str) -> list[s
     return thread_ids
 
 
+def _hydrate(row: sqlite3.Row) -> dict:
+    """A sample row as a dict, with measurements and the measurement check unpacked from JSON."""
+    sample = dict(row)
+    packed = json.loads(sample.pop("measurements_json", None) or "{}")
+    sample["measurements"] = packed.get("measurements")
+    sample["measurement_check"] = packed.get("check")
+    return sample
+
+
 def get_sample(conn: sqlite3.Connection, sample_id: str) -> dict | None:
     row = conn.execute("SELECT * FROM samples WHERE sample_id = ?", (sample_id,)).fetchone()
-    return dict(row) if row else None
+    return _hydrate(row) if row else None
 
 
 def list_samples(conn: sqlite3.Connection, campaign_id: str) -> list[dict]:
     rows = conn.execute("SELECT * FROM samples WHERE campaign_id = ? ORDER BY updated_at DESC", (campaign_id,))
-    return [dict(r) for r in rows]
+    return [_hydrate(r) for r in rows]
+
+
+def recent_decided_samples(conn: sqlite3.Connection, campaign_id: str, limit: int) -> list[dict]:
+    """Samples with a decision (a scientist's or the system's), newest first. Samples still waiting for review are left out."""
+    rows = conn.execute(
+        "SELECT * FROM samples WHERE campaign_id = ? AND decision IS NOT NULL ORDER BY updated_at DESC, rowid DESC LIMIT ?",
+        (campaign_id, limit),
+    )
+    return [_hydrate(r) for r in rows]
 
 
 def plan_usage(conn: sqlite3.Connection, campaign_id: str) -> list[dict]:
