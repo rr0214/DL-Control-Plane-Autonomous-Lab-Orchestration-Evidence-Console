@@ -8,9 +8,10 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import db, run_evals, seed_camp014, telemetry
+from . import db, run_evals, seed_camp014, steps, telemetry
 from .mcp_server import gateway
 from .orchestrator import CampaignOrchestrator
+from .targets import CustomerTargets
 
 KNOWN_CAMPAIGNS = {"CAMP-014"}
 
@@ -18,6 +19,7 @@ KNOWN_CAMPAIGNS = {"CAMP-014"}
 class PlanRequest(BaseModel):
     campaign_id: str = "CAMP-014"
     thread_id: str | None = None
+    targets: CustomerTargets | None = None  # customer target properties; the campaign's own are used when omitted
 
 
 class ReviewRequest(BaseModel):
@@ -71,6 +73,11 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
             "phoenix_url": telemetry.PHOENIX_UI_URL,
         }
 
+    @app.get("/api/loop")
+    def loop() -> dict:
+        """The 11-step target loop with each step's type (LLM, ML, code, person) and build status."""
+        return {"steps": steps.loop()}
+
     @app.get("/api/evals/summary")
     def evals_summary() -> dict:
         """Read-only. Scores the golden dataset against the real gate and review code. No writes, no Phoenix needed."""
@@ -111,7 +118,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
         try:
             if conn.execute("SELECT 1 FROM plans WHERE thread_id = ?", (thread_id,)).fetchone():
                 raise HTTPException(409, f"Thread {thread_id} already exists")
-            out = orch().plan(body.campaign_id, thread_id)
+            out = orch().plan(body.campaign_id, thread_id, body.targets.model_dump() if body.targets else None)
             _persist(conn, thread_id, body.campaign_id, out)
         finally:
             conn.close()

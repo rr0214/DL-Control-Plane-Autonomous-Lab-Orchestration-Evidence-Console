@@ -93,7 +93,20 @@ export type Literature = {
   verified_from: string;
 };
 
+export type Targets = { service_temp_c: number; min_yield_strength_mpa: number; max_hafnium_at_pct: number };
+
+export type LoopStep = {
+  n: number;
+  step: string;
+  what: string;
+  tooling: string;
+  type: "LLM" | "ML" | "code" | "person";
+  mock: boolean;
+  status: "Built" | "Mock" | "Simulated" | "Partly built" | "Planned";
+};
+
 export type PlanResult = {
+  targets?: Targets | null;
   status: "paused" | "complete";
   thread_id: string;
   pending: Pending | null;
@@ -130,7 +143,7 @@ export type SampleRecord = {
 };
 
 export type CampaignView = {
-  campaign: { campaign_id: string; goal: string; tenant: string; export_control: string };
+  campaign: { campaign_id: string; goal: string; tenant: string; export_control: string; targets?: Targets };
   rbac: {
     tenant: string;
     export_control: string;

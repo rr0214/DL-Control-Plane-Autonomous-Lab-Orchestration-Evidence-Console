@@ -7,13 +7,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import db_path
+from .targets import DEFAULT_TARGETS
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS campaigns (
     campaign_id    TEXT PRIMARY KEY,
     goal           TEXT NOT NULL,
     tenant         TEXT NOT NULL,
-    export_control TEXT NOT NULL
+    export_control TEXT NOT NULL,
+    targets_json   TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS runs (
     run_id      TEXT PRIMARY KEY,
@@ -72,7 +74,19 @@ def connect(path: str | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
-    conn.executemany("INSERT OR IGNORE INTO campaigns VALUES (?, ?, ?, ?)", SEED_CAMPAIGNS)
+    # Older databases were created before targets existed: add the column in place.
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(campaigns)")}
+    if "targets_json" not in columns:
+        conn.execute("ALTER TABLE campaigns ADD COLUMN targets_json TEXT NOT NULL DEFAULT '{}'")
+    conn.executemany(
+        "INSERT OR IGNORE INTO campaigns (campaign_id, goal, tenant, export_control) VALUES (?, ?, ?, ?)",
+        SEED_CAMPAIGNS,
+    )
+    # Seed the illustrative default targets only where none are set yet.
+    conn.execute(
+        "UPDATE campaigns SET targets_json = ? WHERE campaign_id = 'CAMP-014' AND targets_json = '{}'",
+        (json.dumps(DEFAULT_TARGETS),),
+    )
     conn.executemany("INSERT OR IGNORE INTO runs VALUES (?, ?, ?, ?, ?, ?)", SEED_RUNS)
     conn.commit()
     return conn
@@ -82,7 +96,9 @@ def get_campaign(conn: sqlite3.Connection, campaign_id: str) -> dict:
     row = conn.execute("SELECT * FROM campaigns WHERE campaign_id = ?", (campaign_id,)).fetchone()
     if row is None:
         raise KeyError(f"Unknown campaign {campaign_id}")
-    return dict(row)
+    campaign = dict(row)
+    campaign["targets"] = json.loads(campaign.pop("targets_json") or "{}")
+    return campaign
 
 
 def get_runs(conn: sqlite3.Connection, campaign_id: str) -> list[dict]:

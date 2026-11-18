@@ -7,6 +7,8 @@ from __future__ import annotations
 import hashlib
 import json
 
+from . import steps
+
 RBAC = {
     "tenant": "SDL-Internal",
     "export_control": "ITAR",
@@ -87,7 +89,7 @@ def build_trace(
                 "name": name,
                 "start_ms": round(cursor, 1),
                 "duration_ms": round(duration, 1),
-                "attributes": attributes,
+                "attributes": {**steps.span_labels(name), **attributes},
             }
         )
         return sid

@@ -1,6 +1,7 @@
 """Public entry point. Wraps the LangGraph so callers plan a batch, then review paused samples."""
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from pathlib import Path
@@ -24,12 +25,13 @@ class CampaignOrchestrator:
         self._lock = threading.Lock()
         self.graph = build_graph(SqliteSaver(self._conn))
 
-    def plan(self, campaign_id: str, thread_id: str) -> dict:
+    def plan(self, campaign_id: str, thread_id: str, targets: dict | None = None) -> dict:
         config = {"configurable": {"thread_id": thread_id}}
         with self._lock, telemetry.span("campaign.plan", kind="AGENT", campaign_id=campaign_id, thread_id=thread_id, mcp_mode=gateway.mode) as sp:
-            out = self.graph.invoke({"campaign_id": campaign_id}, config)
+            out = self.graph.invoke({"campaign_id": campaign_id, "targets": targets}, config)
             summary = self._summarize(thread_id, config, out)
             sp.set_attribute("status", summary["status"])
+            sp.set_attribute("targets", json.dumps(summary.get("targets") or {}))
             sp.set_attribute("blocked_count", sum(1 for v in summary["verdicts"] if not v["allowed"]))
             return summary
 
@@ -56,6 +58,7 @@ class CampaignOrchestrator:
             "thread_id": thread_id,
             "pending": pending[0].value if pending else None,
             "llm_mode": values.get("llm_mode"),
+            "targets": values.get("targets"),
             "notes": values.get("notes", []),
             "candidates": values.get("candidates", []),
             "verdicts": values.get("verdicts", []),

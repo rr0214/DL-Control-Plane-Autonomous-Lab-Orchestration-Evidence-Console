@@ -22,6 +22,7 @@ CAMPAIGN_ELEMENTS = ["Nb", "Ti", "Cr", "Al"]
 class CampaignState(TypedDict, total=False):
     campaign_id: str
     goal: str
+    targets: dict[str, Any]
     scope: dict[str, Any]
     history: list[dict[str, Any]]
     literature: list[dict[str, Any]]
@@ -44,7 +45,10 @@ def traced_node(name: str):
                 f"node.{name}", passthrough=(GraphBubbleUp,), campaign_id=state.get("campaign_id"), mcp_mode=gateway.mode
             ) as sp:
                 try:
-                    return fn(state)
+                    result = fn(state)
+                    if name == "propose_candidates":
+                        sp.set_attribute("is_mock", result.get("llm_mode") == "mock")
+                    return result
                 except GraphBubbleUp:
                     sp.set_attribute("paused_for_review", True)
                     raise
@@ -68,6 +72,8 @@ def retrieve_context(state: CampaignState) -> dict[str, Any]:
     call = {"tool": "search_calphad_literature", "transport": transport, "args": {"elements": CAMPAIGN_ELEMENTS}}
     return {
         "goal": campaign["goal"],
+        # Targets passed in with the plan win; otherwise use the campaign's own.
+        "targets": state.get("targets") or campaign["targets"],
         "scope": {"tenant": campaign["tenant"], "export_control": campaign["export_control"]},
         "history": history,
         "literature": lit["results"],
@@ -78,7 +84,7 @@ def retrieve_context(state: CampaignState) -> dict[str, Any]:
 
 @traced_node("propose_candidates")
 def propose_candidates(state: CampaignState) -> dict[str, Any]:
-    candidates, mode, note, calls = proposer.propose(state["goal"], state["history"], gateway.call)
+    candidates, mode, note, calls = proposer.propose(state["goal"], state["history"], gateway.call, targets=state.get("targets"))
     return {
         "candidates": candidates,
         "llm_mode": mode,

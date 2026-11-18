@@ -1,84 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API } from "@/lib/api";
+import { API, LoopStep } from "@/lib/api";
 
-type Status = "Built" | "Mock" | "Simulated" | "Partly built";
-
-type Step = {
-  n: number;
-  step: string;
-  what: string;
-  tooling: string;
-  status: Status;
-};
-
-// One row per step of the loop, in the order a run actually goes. Status is honest about what is real.
-const STEPS: Step[] = [
-  {
-    n: 1,
-    step: "Read",
-    what: "The planner gets the goal, past runs and literature.",
-    tooling: "SQLite run history, curated literature file, MCP tool search_calphad_literature",
-    status: "Built",
-  },
-  {
-    n: 2,
-    step: "Propose",
-    what: "The LLM picks element sets and routes, with a short rationale.",
-    tooling: "Claude via tool calling (Anthropic API). Mock plan when no API key is set.",
-    status: "Mock",
-  },
-  {
-    n: 3,
-    step: "Optimize",
-    what: "A numeric optimizer sets the exact percentages. The LLM never writes ratios.",
-    tooling: "Bayesian optimizer (fixed table today), called through MCP tool propose_alloy_ratios",
-    status: "Mock",
-  },
-  {
-    n: 4,
-    step: "Gate",
-    what: "Plain code blocks restricted elements and repeats of failed runs.",
-    tooling: "Policy Kernel (Python), MCP tool check_negative_runs",
-    status: "Built",
-  },
-  {
-    n: 5,
-    step: "Score",
-    what: "A risk model predicts ductility and phase stability before anything is made.",
-    tooling: "Pre-synthesis risk model (hard-coded lookup today)",
-    status: "Mock",
-  },
-  {
-    n: 6,
-    step: "Review",
-    what: "A scientist approves or rejects the recipe and can leave a note.",
-    tooling: "LangGraph interrupt() with SQLite checkpoints, role-based access (RBAC), SHA-256 receipts",
-    status: "Built",
-  },
-  {
-    n: 7,
-    step: "Make and measure",
-    what: "A robot makes the sample and scans it.",
-    tooling: "Robotic workcell: synthesis robot, SEM and XRD instruments (simulated readings today)",
-    status: "Simulated",
-  },
-  {
-    n: 8,
-    step: "Learn",
-    what: "Failures are found in traces, turned into tests, and fed back.",
-    tooling: "OpenTelemetry, Arize Phoenix, golden dataset and experiments, promote_overrides script",
-    status: "Partly built",
-  },
-];
+type Status = LoopStep["status"];
 
 const STATUS_TONE: Record<Status, string> = {
   Built: "bg-emerald-100 text-emerald-800",
   Mock: "bg-amber-100 text-amber-900",
   Simulated: "bg-amber-100 text-amber-900",
   "Partly built": "bg-sky-100 text-sky-900",
+  Planned: "bg-slate-100 text-slate-600",
 };
+
+const TYPE_TONE: Record<LoopStep["type"], string> = {
+  LLM: "bg-violet-100 text-violet-800",
+  ML: "bg-amber-100 text-amber-900",
+  code: "bg-slate-200 text-slate-800",
+  person: "bg-emerald-100 text-emerald-800",
+};
+
+function TypeTag({ type, mock }: { type: LoopStep["type"]; mock: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${TYPE_TONE[type]}`}>
+      {type}
+      {mock && <span className="rounded bg-white/70 px-1 text-[10px] uppercase">mock</span>}
+    </span>
+  );
+}
 
 function StatusTag({ status }: { status: Status }) {
   return (
@@ -102,12 +51,18 @@ function Collapsible({ title, children }: { title: string; children: React.React
 
 export default function ArchitectureTab() {
   const [mcpMode, setMcpMode] = useState<string | null>(null);
+  // The steps come from the backend (app/steps.py), so this table cannot drift from the code.
+  const [STEPS, setSteps] = useState<LoopStep[]>([]);
 
   useEffect(() => {
     fetch(`${API}/api/health`, { cache: "no-store" })
       .then((r) => r.json())
       .then((b: { mcp_mode?: string }) => setMcpMode(b.mcp_mode ?? null))
       .catch(() => setMcpMode(null));
+    fetch(`${API}/api/loop`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((b: { steps: LoopStep[] }) => setSteps(b.steps))
+      .catch(() => setSteps([]));
   }, []);
 
   const mcpText =
@@ -132,6 +87,7 @@ export default function ArchitectureTab() {
               <tr>
                 <th className="px-3 py-2">#</th>
                 <th className="px-3 py-2">Step</th>
+                <th className="px-3 py-2">Type</th>
                 <th className="px-3 py-2">What happens</th>
                 <th className="px-3 py-2">Tooling</th>
                 <th className="px-3 py-2">Status</th>
@@ -142,6 +98,7 @@ export default function ArchitectureTab() {
                 <tr key={s.n} className="align-top">
                   <td className="px-3 py-3 font-mono text-xs text-slate-500">{s.n}</td>
                   <td className="px-3 py-3 font-semibold text-slate-900">{s.step}</td>
+                  <td className="px-3 py-3"><TypeTag type={s.type} mock={s.mock} /></td>
                   <td className="px-3 py-3 text-slate-700">{s.what}</td>
                   <td className="px-3 py-3 text-slate-700">{s.tooling}</td>
                   <td className="px-3 py-3">
@@ -161,7 +118,10 @@ export default function ArchitectureTab() {
                 <span className="text-sm font-semibold text-slate-900">
                   {s.n}. {s.step}
                 </span>
-                <StatusTag status={s.status} />
+                <span className="flex gap-1">
+                  <TypeTag type={s.type} mock={s.mock} />
+                  <StatusTag status={s.status} />
+                </span>
               </div>
               <p className="mt-1 text-sm text-slate-700">{s.what}</p>
               <p className="mt-1 text-xs text-slate-500">{s.tooling}</p>
@@ -170,7 +130,7 @@ export default function ArchitectureTab() {
         </ul>
 
         <p className="mt-3 text-xs text-slate-500">
-          Mock means a stand-in with demo values. Simulated means the readings are generated, not measured. The gate, the
+          LLM is a language model, ML is a numeric model, code is plain deterministic code, person is a human decision. Mock means a stand-in with demo values. Simulated means the readings are generated, not measured. The gate, the
           review pause, the receipts and the tracing are real.
         </p>
       </div>

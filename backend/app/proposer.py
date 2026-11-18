@@ -16,6 +16,7 @@ from typing import Callable
 from .chemistry import normalize_composition, normalize_processing
 from .config import anthropic_key, anthropic_model
 from .optimizer import TOOL_SCHEMA
+from .targets import describe as describe_targets
 
 MAX_LLM_CANDIDATES = 1
 
@@ -62,7 +63,9 @@ def _route_rows(call: ToolCall, elements: list[str], processing: str, origin: st
     return _rows(output, origin)
 
 
-def _propose_anthropic(goal: str, history: list[dict], key: str, call: ToolCall, calls: list[dict]) -> tuple[list[dict], int]:
+def _propose_anthropic(
+    goal: str, history: list[dict], key: str, call: ToolCall, calls: list[dict], targets: dict | None = None
+) -> tuple[list[dict], int]:
     import anthropic
 
     client = anthropic.Anthropic(api_key=key)
@@ -72,7 +75,7 @@ def _propose_anthropic(goal: str, history: list[dict], key: str, call: ToolCall,
     messages = [
         {
             "role": "user",
-            "content": f"Campaign goal: {goal}\nPrior runs:\n{prior}\n\nPropose one new candidate route now.",
+            "content": f"Campaign goal: {goal}\n{describe_targets(targets)}\nPrior runs:\n{prior}\n\nPropose one new candidate route now.",
         }
     ]
     rows: list[dict] = []
@@ -106,7 +109,9 @@ def _propose_anthropic(goal: str, history: list[dict], key: str, call: ToolCall,
     return rows, turns
 
 
-def propose(goal: str, history: list[dict], call: ToolCall) -> tuple[list[dict], str, str, list[dict]]:
+def propose(
+    goal: str, history: list[dict], call: ToolCall, targets: dict | None = None
+) -> tuple[list[dict], str, str, list[dict]]:
     """Returns (candidates, llm_mode, note, tool_calls). Controls are always included."""
     calls: list[dict] = []
     probes: list[dict] = []
@@ -121,7 +126,7 @@ def propose(goal: str, history: list[dict], call: ToolCall) -> tuple[list[dict],
     key = anthropic_key()
     if key:
         try:
-            llm_rows, turns = _propose_anthropic(goal, history, key, call, calls)
+            llm_rows, turns = _propose_anthropic(goal, history, key, call, calls, targets)
             kept: list[dict] = []
             seen = set(fixed_keys)
             for row in llm_rows:

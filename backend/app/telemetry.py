@@ -23,6 +23,8 @@ from urllib.parse import urlparse
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
+from . import steps
+
 log = logging.getLogger(__name__)
 
 TRACER_NAME = "sdl-control-plane"
@@ -107,7 +109,8 @@ def span(
     Kind column (CHAIN for a workflow step, AGENT for an agent run, TOOL for a tool call)."""
     with trace.get_tracer(TRACER_NAME).start_as_current_span(name, record_exception=False, set_status_on_exception=False) as sp:
         sp.set_attribute(SPAN_KIND_ATTR, kind)
-        set_attrs(sp, attrs)
+        # Every span says whether its step is LLM, ML, code or person (and whether it is a mock).
+        set_attrs(sp, {**steps.span_labels(name), **attrs})
         try:
             yield sp
         except passthrough:

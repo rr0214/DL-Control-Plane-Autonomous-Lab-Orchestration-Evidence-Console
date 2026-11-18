@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { API, CampaignView, PlanResult, SampleRecord, Span, TriageRecord, Verdict } from "@/lib/api";
+import { API, CampaignView, PlanResult, SampleRecord, Span, Targets, TriageRecord, Verdict } from "@/lib/api";
 
 const ROLES = ["Scientist (PI)", "Operator"];
 
@@ -39,6 +39,23 @@ function statusTone(status: string): "green" | "yellow" | "red" | "slate" {
 const SHOW_REVISE = false;
 
 const candidateLabel = (id: string) => id.replace(/^C-(\d+)$/, "Candidate $1");
+
+const TYPE_TONE: Record<string, string> = {
+  LLM: "bg-violet-100 text-violet-800",
+  ML: "bg-amber-100 text-amber-900",
+  code: "bg-slate-200 text-slate-800",
+  person: "bg-emerald-100 text-emerald-800",
+};
+
+// Says what kind of step this is: a language model, a numeric model, plain code, or a person.
+function TypeChip({ type, mock = false }: { type: string; mock?: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${TYPE_TONE[type] ?? TYPE_TONE.code}`}>
+      {type}
+      {mock && <span className="rounded bg-white/70 px-1 text-[10px] uppercase">mock</span>}
+    </span>
+  );
+}
 
 function StepHeader({ n, title, emphasis = false }: { n: number; title: string; emphasis?: boolean }) {
   const label = `Step ${n}: ${title}`;
@@ -103,6 +120,10 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
   const [error, setError] = useState<string | null>(null);
   const [selectedSample, setSelectedSample] = useState<string | null>(null);
   const [selectedSpan, setSelectedSpan] = useState<Span | null>(null);
+  const [targets, setTargets] = useState<Targets | null>(null);
+  const activeTargets = targets ?? campaign?.campaign.targets ?? null;
+  const setTarget = (key: keyof Targets, value: string) =>
+    setTargets({ ...(activeTargets as Targets), [key]: Number(value) });
 
   async function runPlan() {
     setBusy(true);
@@ -111,7 +132,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
       const res = await fetch(`${API}/api/campaigns/plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaign_id: "CAMP-014" }),
+        body: JSON.stringify({ campaign_id: "CAMP-014", ...(activeTargets ? { targets: activeTargets } : {}) }),
       });
       if (!res.ok) throw new Error(await res.text());
       setPlan(await res.json());
@@ -174,6 +195,34 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
             <Pill tone="slate">Tenant {campaign?.campaign.tenant ?? "-"}</Pill>
             <Pill tone="red">{campaign?.campaign.export_control ?? "ITAR"}</Pill>
           </div>
+        </div>
+
+        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Customer targets</h2>
+            <TypeChip type="person" />
+          </div>
+          <p className="mt-1 text-xs text-slate-500">Set by the customer. Default values are illustrative examples, not real customer data.</p>
+          {activeTargets && (
+            <div className="mt-2 space-y-2 text-xs text-slate-700">
+              {([
+                ["service_temp_c", "High temperature performance (min service temp, °C)"],
+                ["min_yield_strength_mpa", "Strength (min yield, MPa)"],
+                ["max_hafnium_at_pct", "Reduced hafnium (max Hf, at%)"],
+              ] as [keyof Targets, string][]).map(([key, label]) => (
+                <label key={key} className="block">
+                  {label}
+                  <input
+                    type="number"
+                    step={key === "max_hafnium_at_pct" ? 0.1 : 1}
+                    value={activeTargets[key]}
+                    onChange={(e) => setTarget(key, e.target.value)}
+                    className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                  />
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         <Collapsible title="Related literature" badge={literature.length ? <Pill tone="slate">{literature.length}</Pill> : undefined}>
@@ -453,7 +502,11 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                     selectedSpan?.span_id === s.span_id ? "bg-slate-100" : ""
                   }`}
                 >
-                  {s.name} <span className="text-slate-400">{s.duration_ms.toFixed(1)}ms</span>
+                  {s.name}{" "}
+                  {typeof s.attributes.step_type === "string" && (
+                    <TypeChip type={s.attributes.step_type} mock={s.attributes.is_mock === true} />
+                  )}{" "}
+                  <span className="text-slate-400">{s.duration_ms.toFixed(1)}ms</span>
                 </button>
               </li>
             ))}
