@@ -26,41 +26,48 @@ def sample(status="Green", **kw):
 
 # ---- comparison -------------------------------------------------------------------------------
 
-def test_all_targets_met():
+def test_all_assessed_targets_met_and_temperature_is_not_assessed():
     c = release.compare(TARGETS, m())
-    assert c["all_met"] and [r["passed"] for r in c["rows"]] == [True, True, True]
+    assert c["all_met"] and [r["passed"] for r in c["rows"]] == [None, True, True]
+    assert c["not_assessed"] == ["service_temp_c"]
 
 
-def test_each_target_can_fail_on_its_own():
-    assert [r["passed"] for r in release.compare(TARGETS, m(ox=6.0))["rows"]] == [False, True, True]   # temperature
-    assert [r["passed"] for r in release.compare(TARGETS, m(hv=150))["rows"]] == [True, False, True]   # strength
-    assert [r["passed"] for r in release.compare(TARGETS, m(hf=0.3))["rows"]] == [True, True, False]   # hafnium
+def test_temperature_is_never_a_pass_or_a_fail_whatever_the_oxidation():
+    for ox in (0.5, 3.0, 9.0):
+        row = release.compare(TARGETS, m(ox=ox))["rows"][0]
+        assert row["passed"] is None and row["value"] is None and row["basis"] == "not assessed until measured"
+
+
+def test_strength_and_hafnium_can_each_fail_on_their_own():
+    assert [r["passed"] for r in release.compare(TARGETS, m(hv=150))["rows"]] == [None, False, True]   # strength
+    assert [r["passed"] for r in release.compare(TARGETS, m(hf=0.3))["rows"]] == [None, True, False]   # hafnium
     assert release.compare(dict(TARGETS, max_hafnium_at_pct=0.5), m(hf=0.3))["rows"][2]["passed"]
 
 
-def test_every_row_says_whether_it_is_measured_or_estimated():
+def test_every_row_says_what_it_rests_on():
     bases = {r["key"]: r["basis"] for r in release.compare(TARGETS, m())["rows"]}
-    assert bases["service_temp_c"].startswith("estimated") and bases["min_yield_strength_mpa"].startswith("estimated")
-    assert bases["max_hafnium_at_pct"].startswith("measured")
+    assert bases["min_yield_strength_mpa"].startswith("estimated") and bases["max_hafnium_at_pct"].startswith("measured")
 
 
 # ---- rules ------------------------------------------------------------------------------------
 
-def test_clean_green_sample_needs_no_note():
+def test_clean_green_sample_needs_no_note_even_though_temperature_is_not_assessed():
     ev = release.evaluate(TARGETS, sample(), None)
     assert ev["exceptions"] == [] and not ev["needs_note"] and release.decide(ev, "release", "")["ok"]
+    r = release.make_receipt(sample(), TARGETS, ev, "release", "", "Scientist (PI)")
+    assert r["payload"]["not_assessed"] == ["service_temp_c"]  # recorded in the receipt, not hidden
 
 
 def test_exceptions_need_a_written_reason():
-    ev = release.evaluate(TARGETS, sample("Yellow", ox=6.0), {"final_action": "hold"})
-    assert ev["exceptions"] == ["target_missed:service_temp_c", "status_yellow", "diagnosis_hold"]
+    ev = release.evaluate(TARGETS, sample("Yellow", hv=150), {"final_action": "hold"})
+    assert ev["exceptions"] == ["target_missed:min_yield_strength_mpa", "status_yellow", "diagnosis_hold"]
     v = release.decide(ev, "release", "ok")
     assert not v["ok"] and v["rule"] == "NOTE_REQUIRED"
     assert release.decide(ev, "release", "Customer accepts lower temperature for this lot")["ok"]
 
 
 def test_withholding_never_needs_a_note():
-    ev = release.evaluate(TARGETS, sample("Yellow", ox=6.0), None)
+    ev = release.evaluate(TARGETS, sample("Yellow", hv=150), None)
     assert release.decide(ev, "withhold", "")["ok"]
 
 
@@ -107,13 +114,15 @@ def test_preview_shows_the_comparison_and_the_exceptions(client):
     p = client.get(f"/api/samples/{sid}/release").json()
     assert p["targets"] == TARGETS and p["release"] is None and p["min_note"] == release.MIN_NOTE
     assert "status_yellow" in p["evaluation"]["exceptions"] and "diagnosis_hold" in p["evaluation"]["exceptions"]
+    assert p["evaluation"]["comparison"]["not_assessed"] == ["service_temp_c"]
     assert p["evaluation"]["needs_note"]
 
 
 def test_release_uses_the_targets_the_plan_was_run_with(client):
-    sid = made_sample(client, targets=dict(TARGETS, service_temp_c=1000))
+    sid = made_sample(client, targets=dict(TARGETS, service_temp_c=1000, min_yield_strength_mpa=3000))
     rows = {r["key"]: r for r in client.get(f"/api/samples/{sid}/release").json()["evaluation"]["comparison"]["rows"]}
-    assert rows["service_temp_c"]["requirement"] == "at least 1000 C" and rows["service_temp_c"]["passed"]
+    assert rows["service_temp_c"]["requirement"] == "at least 1000 C" and rows["service_temp_c"]["passed"] is None
+    assert rows["min_yield_strength_mpa"]["passed"] is False
 
 
 def test_release_needs_a_note_then_succeeds_with_one_and_cannot_be_repeated(client):

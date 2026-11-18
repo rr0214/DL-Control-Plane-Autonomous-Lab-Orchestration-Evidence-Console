@@ -20,7 +20,7 @@ The order of steps is fixed in code (a LangGraph graph with fixed edges). Agents
 | 8 | Measure properties | code | Simulated. Composition, hardness and oxidation (mock formulas, `measure.py`) plus the earlier scan fields |
 | 9 | Measurement check | code | Built (`check.py`). Real rules, simulated inputs |
 | 10 | Diagnosis agent | LLM | Partly built. Real Claude call when an API key is set, otherwise a rule-based stand-in; code gate is real; actions are logged, not executed |
-| 11 | Release check | person | Built. Strength and temperature are estimates from simulated data |
+| 11 | Release check | person | Built. Strength is an estimate from simulated data; temperature is not assessed |
 
 The same list is served by `GET /api/loop` (source: `backend/app/steps.py`) and shown in the Architecture tab. Every trace span carries `step_type`, `step_n` and `is_mock` so a trace row says what kind of step it is.
 
@@ -114,13 +114,13 @@ A person decides; code (`backend/app/release.py`) does the comparison and enforc
 
 | Customer target | Compared with | Basis |
 |-----------------|---------------|-------|
-| High temperature performance (minimum service temperature) | A service temperature derived from oxidation mass gain | **Estimate**, a made-up correlation for the demo |
+| High temperature performance (minimum service temperature) | Nothing: no instrument measures it | **Not assessed until measured.** Shown as neither pass nor fail, and recorded as not assessed in the receipt |
 | Strength (minimum yield) | Yield strength derived from hardness (about HV x 9.807 / 3) | **Estimate**, a common rule of thumb |
 | Reduced hafnium (maximum Hf) | Measured Hf from the simulated composition reading | Direct comparison on simulated data |
 
 - The targets used are the ones the plan was run with.
 - **Release** is allowed only for the Scientist (PI) role. A **Red** sample cannot be released at all. **Withhold** is always allowed and needs no reason.
-- **Exceptions** (a missed target, a Yellow status, an open diagnosis hold) make a written reason mandatory for a release, and the exceptions are recorded in the receipt.
+- **Exceptions** (a missed target, a Yellow status, an open diagnosis hold; a target that is not assessed is shown and recorded but is not an exception) make a written reason mandatory for a release, and the exceptions are recorded in the receipt.
 - One decision per sample per plan. Each decision saves a SHA-256 receipt (the same idea as the review receipts) that covers the targets, the comparison, the exceptions, the note and the role.
 - The role comes from a client header in this demo, so the sign-off is **not** real authentication.
 - The release decision and note also go back into what the planner reads next time.
@@ -140,5 +140,5 @@ Every real LLM call is recorded: input and output tokens, model, cost, latency, 
 
 ## 11. What is not claimed
 - Shadow replay against historical data is not built and is not claimed anywhere.
-- Measurements are simulated; strength and temperature at release are estimates from them. Diagnosis actions are logged, not executed. Sign-off roles are not real authentication.
+- Measurements are simulated; strength at release is an estimate from them and temperature is not assessed. Diagnosis actions are logged, not executed. Sign-off roles are not real authentication.
 - All numeric risk, ductility and instrument values are demo data unless the UI says otherwise.

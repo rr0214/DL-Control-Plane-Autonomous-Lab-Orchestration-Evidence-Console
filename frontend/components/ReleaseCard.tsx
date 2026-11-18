@@ -5,12 +5,12 @@ import { API } from "@/lib/api";
 
 // Loop step 11 (a person decides). The comparison and the rules come from the backend; this only shows them.
 
-type Row = { key: string; label: string; requirement: string; value: number; unit: string; passed: boolean; basis: string; margin: number };
+type Row = { key: string; label: string; requirement: string; value: number | null; unit: string; passed: boolean | null; basis: string; margin: number | null };
 type Preview = {
   sample_id: string;
   min_note: number;
   evaluation: {
-    comparison: { rows: Row[]; all_met: boolean };
+    comparison: { rows: Row[]; all_met: boolean; not_assessed: string[] };
     exceptions: string[];
     needs_note: boolean;
     can_release: boolean;
@@ -83,8 +83,10 @@ export default function ReleaseCard({ sampleId, role, onChange }: { sampleId: st
                 <div className="text-[11px] text-slate-400">{r.basis}</div>
               </td>
               <td className="py-1 pr-2 text-slate-600">{r.requirement}</td>
-              <td className="py-1 pr-2 font-medium">{r.value} {r.unit}</td>
-              <td className={`py-1 font-medium ${r.passed ? "text-emerald-700" : "text-red-700"}`}>{r.passed ? "met" : "missed"}</td>
+              <td className="py-1 pr-2 font-medium">{r.value === null ? "n/a" : `${r.value} ${r.unit}`}</td>
+              <td className={`py-1 font-medium ${r.passed === null ? "text-slate-500" : r.passed ? "text-emerald-700" : "text-red-700"}`}>
+                {r.passed === null ? "not assessed" : r.passed ? "met" : "missed"}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -131,7 +133,7 @@ export default function ReleaseCard({ sampleId, role, onChange }: { sampleId: st
               Withhold
             </button>
           </div>
-          <p className="mt-1 text-[11px] text-slate-400">Acting as {role}. Strength and temperature are estimates from simulated data.</p>
+          <p className="mt-1 text-[11px] text-slate-400">Acting as {role}. Strength is an estimate from simulated hardness. Temperature is not assessed until it is measured.</p>
         </>
       )}
       {error && <p className="mt-2 text-red-700">{error}</p>}

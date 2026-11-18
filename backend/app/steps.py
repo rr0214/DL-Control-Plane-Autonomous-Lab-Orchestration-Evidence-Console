@@ -110,7 +110,7 @@ LOOP: list[dict] = [
         "n": 11,
         "step": "Release check",
         "what": "Results are compared to the customer targets, and a scientist signs off.",
-        "tooling": "Results are compared with the customer targets (strength and temperature are estimates from simulated data) and a scientist signs off. A Red sample cannot be released; an exception needs a written reason. A receipt is saved.",
+        "tooling": "Results are compared with the customer targets (strength is an estimate from simulated data; temperature is not assessed until measured) and a scientist signs off. A Red sample cannot be released; an exception needs a written reason. A receipt is saved.",
         "type": "person",
         "mock": False,
         "status": "Built",
