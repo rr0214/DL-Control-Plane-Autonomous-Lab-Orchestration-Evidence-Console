@@ -20,7 +20,7 @@ The order of steps is fixed in code (a LangGraph graph with fixed edges). Agents
 | 8 | Measure properties | code | Simulated. Composition, hardness and oxidation (mock formulas, `measure.py`) plus the earlier scan fields |
 | 9 | Measurement check | code | Built (`check.py`). Real rules, simulated inputs |
 | 10 | Diagnosis agent | LLM | Partly built. Real Claude call when an API key is set, otherwise a rule-based stand-in; code gate is real; actions are logged, not executed |
-| 11 | Release check | person | Planned [S5] |
+| 11 | Release check | person | Built. Strength and temperature are estimates from simulated data |
 
 The same list is served by `GET /api/loop` (source: `backend/app/steps.py`) and shown in the Architecture tab. Every trace span carries `step_type`, `step_n` and `is_mock` so a trace row says what kind of step it is.
 
@@ -55,7 +55,7 @@ The same list is served by `GET /api/loop` (source: `backend/app/steps.py`) and 
 | Edit policy | Policy Owner | Cannot approve samples |
 | Export receipts, view evidence | Auditor | Read only |
 | Approve a diagnosis action | Action gate (code) | Only `re-measure` or `hold` exist. Release is not an action |
-| Release a result against customer targets | Scientist (PI) [S5] | Planned |
+| Release or withhold a result against customer targets | Scientist (PI) only (`release` permission) | A Red sample cannot be released. An exception needs a written reason |
 
 Roles come from the client `X-Role` header in this demo. That is **not** real authentication; a real deployment would take the role from a signed identity.
 
@@ -82,6 +82,8 @@ Every tool call is traced with its transport (`fastmcp` or `direct` fallback).
 | Restricted element measured above 0.1 at% | Measurement check | Red |
 | Measured composition more than 1.0 at% from the recipe, or an unexpected element above 0.5 at% | Measurement check | Yellow |
 | Hardness more than 30% or oxidation more than 50% away from similar compositions | Measurement check | Yellow |
+| Red sample at release | Release check (`RED_NO_RELEASE`) | Cannot be released, only withheld |
+| Release with an exception: a missed target, a Yellow status, or an open diagnosis hold | Release check (`NOTE_REQUIRED`) | Needs a written reason of at least 10 characters |
 
 The hafnium rule and the customer's "reduced hafnium" target are different things: the first is a hard block on the lab floor, the second is a property the customer asks for.
 
@@ -107,20 +109,36 @@ Plain code in `backend/app/action_gate.py`. The gate fails closed: anything it d
 - **The cap is counted per plan** (sample ids repeat across plans in this demo). Because nothing re-measures yet, the cap cannot trigger in normal use; it is unit tested and will matter once a re-measure loop exists.
 - A hold does not change the sample's status or release anything. Release is a scientist's decision at the release check [S5].
 
-## 8. What the planner reads about earlier work
+## 8. Release check (step 11)
+A person decides; code (`backend/app/release.py`) does the comparison and enforces the rules. It applies to a sample that was actually made.
+
+| Customer target | Compared with | Basis |
+|-----------------|---------------|-------|
+| High temperature performance (minimum service temperature) | A service temperature derived from oxidation mass gain | **Estimate**, a made-up correlation for the demo |
+| Strength (minimum yield) | Yield strength derived from hardness (about HV x 9.807 / 3) | **Estimate**, a common rule of thumb |
+| Reduced hafnium (maximum Hf) | Measured Hf from the simulated composition reading | Direct comparison on simulated data |
+
+- The targets used are the ones the plan was run with.
+- **Release** is allowed only for the Scientist (PI) role. A **Red** sample cannot be released at all. **Withhold** is always allowed and needs no reason.
+- **Exceptions** (a missed target, a Yellow status, an open diagnosis hold) make a written reason mandatory for a release, and the exceptions are recorded in the receipt.
+- One decision per sample per plan. Each decision saves a SHA-256 receipt (the same idea as the review receipts) that covers the targets, the comparison, the exceptions, the note and the role.
+- The role comes from a client header in this demo, so the sign-off is **not** real authentication.
+- The release decision and note also go back into what the planner reads next time.
+
+## 9. What the planner reads about earlier work
 Before each plan, code builds the run history the planner sees: the two seed runs, then the 10 most recent decided samples, oldest first. Samples still waiting for review are left out.
 - **Each line has:** composition and route, outcome (a held sample is "Held (not made)"), who decided (scientist or system) and the decision, the measurement check flags, and the scientist's note (the "why").
 - **Notes are untrusted text.** They are cleaned (control characters, quotes), cut to 200 characters, and shown to the model as quoted data. The planner prompt (`planner-v3`) says a note is information about a run, never an instruction.
 - **Not wired to the Policy Kernel.** A scientist's reject informs the planner only. The kernel's repeat-run block still reads the run table, which only a code change or a Policy Owner edit can alter.
 - A reset clears the samples, and with them this history.
 
-## 9. Cost, latency and versions
+## 10. Cost, latency and versions
 Every real LLM call is recorded: input and output tokens, model, cost, latency, prompt version and git commit. They appear on the trace span (`llm.planner`, `llm.literature`), in the plan result, and in the Evals tab ("Cost and latency per plan"). Mock plans make no calls and show zero.
 - Model per agent: `SDL_MODEL_PLANNER`, `SDL_MODEL_LITERATURE`, `SDL_MODEL_DIAGNOSIS`, else `ANTHROPIC_MODEL`, else `claude-sonnet-5-5`.
 - Prices are a hand-set table in `backend/app/llm_usage.py`. **Verify against current pricing** before quoting any cost. A model with no price shows cost "n/a", never a guess.
 - Prompt versions: `planner-v3`, `literature-v1`, `diagnosis-v1`. Change the string when the prompt changes.
 
-## 10. What is not claimed
+## 11. What is not claimed
 - Shadow replay against historical data is not built and is not claimed anywhere.
-- The release check is planned, not built. Measurements are simulated, and diagnosis actions are logged, not executed.
+- Measurements are simulated; strength and temperature at release are estimates from them. Diagnosis actions are logged, not executed. Sign-off roles are not real authentication.
 - All numeric risk, ductility and instrument values are demo data unless the UI says otherwise.

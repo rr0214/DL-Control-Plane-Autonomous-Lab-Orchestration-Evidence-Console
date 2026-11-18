@@ -13,12 +13,12 @@ RBAC = {
     "tenant": "SDL-Internal",
     "export_control": "ITAR",
     "roles": [
-        {"role": "Scientist (PI)", "permissions": ["approve", "revise", "reject", "view_evidence"]},
+        {"role": "Scientist (PI)", "permissions": ["approve", "revise", "reject", "release", "view_evidence"]},
         {"role": "Operator", "permissions": ["revise", "view_evidence"]},
         {"role": "Policy Owner", "permissions": ["view_evidence", "edit_policy"]},
         {"role": "Auditor", "permissions": ["view_evidence", "export_receipts"]},
     ],
-    "decision_permissions": {"approve": "approve", "revise": "revise", "reject": "reject"},
+    "decision_permissions": {"approve": "approve", "revise": "revise", "reject": "reject", "release": "release", "withhold": "release"},
     "principle": "Agents propose, humans decide at HITL gates, and no role can override the Policy Kernel.",
 }
 

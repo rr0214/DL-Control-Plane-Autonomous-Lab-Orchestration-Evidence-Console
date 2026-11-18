@@ -46,6 +46,17 @@ CREATE TABLE IF NOT EXISTS actions (
     executed     INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS releases (
+    release_id   TEXT PRIMARY KEY,
+    thread_id    TEXT NOT NULL,
+    campaign_id  TEXT NOT NULL,
+    sample_id    TEXT NOT NULL,
+    decision     TEXT NOT NULL,
+    note         TEXT NOT NULL DEFAULT '',
+    evaluation_json TEXT NOT NULL,
+    receipt_json TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS samples (
     sample_id      TEXT PRIMARY KEY,
     thread_id      TEXT NOT NULL,
@@ -189,6 +200,44 @@ def save_action(conn: sqlite3.Connection, thread_id: str, campaign_id: str, samp
     conn.commit()
 
 
+def save_release(conn: sqlite3.Connection, thread_id: str, campaign_id: str, sample_id: str, decision: str, note: str, evaluation: dict, receipt: dict) -> str:
+    release_id = f"REL-{thread_id}-{sample_id}"
+    conn.execute(
+        "INSERT INTO releases (release_id, thread_id, campaign_id, sample_id, decision, note, evaluation_json, receipt_json, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (release_id, thread_id, campaign_id, sample_id, decision, note, json.dumps(evaluation), json.dumps(receipt), _now()),
+    )
+    conn.commit()
+    return release_id
+
+
+def _release_row(r: sqlite3.Row) -> dict:
+    row = dict(r)
+    row["evaluation"] = json.loads(row.pop("evaluation_json"))
+    row["receipt"] = json.loads(row.pop("receipt_json"))
+    return row
+
+
+def get_release(conn: sqlite3.Connection, thread_id: str, sample_id: str) -> dict | None:
+    r = conn.execute("SELECT * FROM releases WHERE thread_id = ? AND sample_id = ?", (thread_id, sample_id)).fetchone()
+    return _release_row(r) if r else None
+
+
+def list_releases(conn: sqlite3.Connection, campaign_id: str) -> list[dict]:
+    rows = conn.execute("SELECT * FROM releases WHERE campaign_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 50", (campaign_id,))
+    return [_release_row(r) for r in rows]
+
+
+def get_action(conn: sqlite3.Connection, thread_id: str, sample_id: str) -> dict | None:
+    r = conn.execute("SELECT * FROM actions WHERE thread_id = ? AND sample_id = ?", (thread_id, sample_id)).fetchone()
+    return dict(r) if r else None
+
+
+def plan_targets(conn: sqlite3.Connection, thread_id: str) -> dict | None:
+    r = conn.execute("SELECT summary_json FROM plans WHERE thread_id = ?", (thread_id,)).fetchone()
+    return (json.loads(r["summary_json"]).get("targets") if r else None) or None
+
+
 def count_remeasures(conn: sqlite3.Connection, thread_id: str, sample_id: str) -> int:
     """Earlier re-measure actions for this sample in this plan. (Sample ids repeat across plans, so the plan is part of the key.)"""
     return conn.execute(
@@ -218,6 +267,7 @@ def clear_campaign_lineage(conn: sqlite3.Connection, campaign_id: str) -> list[s
     ]
     conn.execute("DELETE FROM samples WHERE campaign_id = ?", (campaign_id,))
     conn.execute("DELETE FROM actions WHERE campaign_id = ?", (campaign_id,))
+    conn.execute("DELETE FROM releases WHERE campaign_id = ?", (campaign_id,))
     conn.execute("DELETE FROM plans WHERE campaign_id = ?", (campaign_id,))
     conn.commit()
     return thread_ids

@@ -110,10 +110,10 @@ LOOP: list[dict] = [
         "n": 11,
         "step": "Release check",
         "what": "Results are compared to the customer targets, and a scientist signs off.",
-        "tooling": "Not built yet.",
+        "tooling": "Results are compared with the customer targets (strength and temperature are estimates from simulated data) and a scientist signs off. A Red sample cannot be released; an exception needs a written reason. A receipt is saved.",
         "type": "person",
         "mock": False,
-        "status": "Planned",
+        "status": "Built",
     },
 ]
 
@@ -136,6 +136,7 @@ _SPAN_LABELS: dict[str, tuple[str, int | None, bool]] = {
     "diagnose_flagged": ("LLM", 10, False),  # live span sets is_mock when the stand-in proposed
     "llm.diagnosis": ("LLM", 10, False),
     "action.gate": ("code", 10, False),
+    "release.signoff": ("person", 11, False),
     "measurement.check": ("code", 9, False),
     "mcp.search_calphad_literature": ("code", 2, False),
     "mcp.propose_alloy_ratios": ("ML", 4, True),

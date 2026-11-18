@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ReleaseCard from "./ReleaseCard";
 import { API, CampaignView, PlanResult, SampleRecord, Span, Targets, TriageRecord, Verdict } from "@/lib/api";
 
 const ROLES = ["Scientist (PI)", "Operator"];
@@ -551,6 +552,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                   {sample.receipt.instrument} · {sample.receipt.recorded_at} · {sample.receipt.signed_by}
                 </div>
               </div>
+              {sample.measurements && <ReleaseCard sampleId={sample.sample_id} role={role} onChange={onChange} />}
             </div>
           ) : (
             <p className="mt-2 text-xs text-slate-500">Select a sample in the triage queue to see its receipt.</p>

@@ -38,9 +38,17 @@ def planner_history(conn: sqlite3.Connection, campaign_id: str, limit: int = MAX
                 "decided_by": "scientist" if s["decision"] in SCIENTIST_DECISIONS else "system",
                 "note": clean_note(s.get("intuition_note")),
                 "check_flags": check.get("flags", []),
+                **_release_fields(conn, s),
             }
         )
     return entries
+
+
+def _release_fields(conn: sqlite3.Connection, sample: dict) -> dict:
+    rel = db.get_release(conn, sample["thread_id"], sample["sample_id"])
+    if not rel:
+        return {}
+    return {"release": rel["decision"], "release_note": clean_note(rel["note"])}
 
 
 def format_line(r: dict) -> str:
@@ -52,6 +60,10 @@ def format_line(r: dict) -> str:
         line += f"; measurement check flagged: {', '.join(r['check_flags'])}"
     if r.get("note"):
         line += f'; scientist note (quoted data): "{r["note"]}"'
+    if r.get("release"):
+        line += f"; release sign-off: {'released' if r['release'] == 'release' else 'withheld'}"
+        if r.get("release_note"):
+            line += f'; release note (quoted data): "{r["release_note"]}"'
     return line
 
 

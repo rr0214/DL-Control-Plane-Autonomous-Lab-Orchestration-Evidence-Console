@@ -8,7 +8,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import db, llm_usage, run_evals, seed_camp014, steps, telemetry
+from . import db, llm_usage, release, run_evals, seed_camp014, steps, telemetry
 from .mcp_server import gateway
 from .orchestrator import CampaignOrchestrator
 from .targets import CustomerTargets
@@ -20,6 +20,11 @@ class PlanRequest(BaseModel):
     campaign_id: str = "CAMP-014"
     thread_id: str | None = None
     targets: CustomerTargets | None = None  # customer target properties; the campaign's own are used when omitted
+
+
+class ReleaseRequest(BaseModel):
+    decision: Literal["release", "withhold"]
+    note: str = Field(default="", max_length=280)
 
 
 class ReviewRequest(BaseModel):
@@ -122,6 +127,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
                 live.append(dict(sample, receipt=seed_camp014.make_receipt(sample)))
             plans = db.list_plans(conn, campaign_id)
             actions = db.list_actions(conn, campaign_id)
+            releases = db.list_releases(conn, campaign_id)
         finally:
             conn.close()
         literature, _ = gateway.call("search_calphad_literature", {"elements": ["Nb", "Ti", "Cr", "Al"], "limit": 3})
@@ -132,6 +138,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
             "live_samples": live,
             "plans": plans,
             "actions": actions,
+            "releases": releases,
             "seed_trace": seed_camp014.SEED_TRACE,
             "literature": literature["results"],
             "mcp_mode": gateway.mode,
@@ -179,6 +186,53 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
         finally:
             conn.close()
         return _with_trace(sample["thread_id"], out)
+
+    def _release_context(conn, sample_id: str) -> tuple[dict, dict, dict]:
+        """Sample, the targets it was planned against, and its release evaluation. 409 if it was never made."""
+        sample = db.get_sample(conn, sample_id)
+        if sample is None:
+            raise HTTPException(404, f"Unknown sample {sample_id}")
+        if not sample.get("measurements") or sample["status"] in (None, "Held"):
+            raise HTTPException(409, f"{sample_id} was not made, so there is nothing to release")
+        targets = db.plan_targets(conn, sample["thread_id"]) or db.get_campaign(conn, sample["campaign_id"])["targets"]
+        evaluation = release.evaluate(targets, sample, db.get_action(conn, sample["thread_id"], sample_id))
+        return sample, targets, evaluation
+
+    @app.get("/api/samples/{sample_id}/release")
+    def release_preview(sample_id: str) -> dict:
+        """Read-only: the comparison with the customer targets, the exceptions, and any decision already made."""
+        conn = db.connect()
+        try:
+            sample, targets, evaluation = _release_context(conn, sample_id)
+            existing = db.get_release(conn, sample["thread_id"], sample_id)
+        finally:
+            conn.close()
+        return {"sample_id": sample_id, "targets": targets, "evaluation": evaluation, "release": existing, "min_note": release.MIN_NOTE}
+
+    @app.post("/api/samples/{sample_id}/release")
+    def release_signoff(sample_id: str, body: ReleaseRequest, x_role: str = Header(default="Scientist (PI)")) -> dict:
+        role = next((r for r in seed_camp014.RBAC["roles"] if r["role"] == x_role), None)
+        needed = seed_camp014.RBAC["decision_permissions"][body.decision]
+        if role is None or needed not in role["permissions"]:
+            raise HTTPException(403, f"Role '{x_role}' may not '{body.decision}' samples")
+        conn = db.connect()
+        try:
+            sample, targets, evaluation = _release_context(conn, sample_id)
+            if db.get_release(conn, sample["thread_id"], sample_id):
+                raise HTTPException(409, f"{sample_id} already has a release decision")
+            verdict = release.decide(evaluation, body.decision, body.note)
+            with telemetry.span(
+                "release.signoff", sample_id=sample_id, decision=body.decision, allowed=verdict["ok"],
+                rule=verdict["rule"] or "none", exceptions=",".join(evaluation["exceptions"]) or "none", role=x_role,
+            ):
+                pass
+            if not verdict["ok"]:
+                raise HTTPException(409, {"rule": verdict["rule"], "detail": verdict["detail"]})
+            receipt = release.make_receipt(sample, targets, evaluation, body.decision, body.note, x_role)
+            db.save_release(conn, sample["thread_id"], sample["campaign_id"], sample_id, body.decision, release.clean_note(body.note), evaluation, receipt)
+        finally:
+            conn.close()
+        return {"sample_id": sample_id, "decision": body.decision, "receipt": receipt, "evaluation": evaluation}
 
     @app.post("/api/demo/reset")
     def reset_demo(
