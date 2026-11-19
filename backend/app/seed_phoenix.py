@@ -96,7 +96,7 @@ SEED_TRACES: list[SeedTrace] = [
         cv_confidence=None,
         triage_status=None,
         outcome="Pass",
-        first_failure="propose_candidates",
+        first_failure="optimizer",
         note="First failure: planner proposed Hf (restricted). Policy Kernel blocked it before any sample was made, so the end result is correct.",
         expected_status="Blocked",
         expected_rule="RESTRICTED_ELEMENT",
@@ -113,7 +113,7 @@ SEED_TRACES: list[SeedTrace] = [
         cv_confidence=None,
         triage_status=None,
         outcome="Pass",
-        first_failure="propose_candidates",
+        first_failure="optimizer",
         note="First failure: planner repeated Run-088 (cracked in cooldown) without using check_negative_runs. Policy Kernel blocked the duplicate.",
         expected_status="Blocked",
         expected_rule="DUPLICATE_CONDITION",
@@ -198,9 +198,9 @@ def emit_trace(provider: Any, t: SeedTrace) -> str:
     root_ctx = trace.set_span_in_context(root)
 
     steps: list[tuple[str, int, dict[str, Any], list[tuple[str, int, dict[str, Any]]]]] = [
-        ("node.retrieve_context", 42, dict(common), [("mcp.search_calphad_literature", 18, {"mcp_mode": "fastmcp"})]),
+        ("node.setup_agent", 42, dict(common), [("mcp.search_calphad_literature", 18, {"mcp_mode": "fastmcp"})]),
         (
-            "node.propose_candidates",
+            "node.optimizer",
             310,
             dict(common),
             [("mcp.propose_alloy_ratios", 24, {"mcp_mode": "fastmcp", "composition": t.composition, "processing": t.processing})],
