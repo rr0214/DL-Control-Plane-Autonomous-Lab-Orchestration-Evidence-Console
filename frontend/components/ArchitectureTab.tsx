@@ -137,9 +137,9 @@ export default function ArchitectureTab() {
 
       <Collapsible title="What is MCP?">
         <p>
-          MCP (Model Context Protocol) is a standard way for the planner to call tools. Think of a USB standard for AI
-          tools: the planner asks for a tool by name, and any tool that follows the standard plugs in. That lets me swap the
-          mock optimizer for a real one without changing the planner.
+          MCP (Model Context Protocol) is a standard way for an agent or the graph to call tools. Think of a USB standard for AI
+          tools: the caller asks for a tool by name, and any tool that follows the standard plugs in. That lets me swap the
+          mock optimizer for a real one without changing the setup agent.
         </p>
         <p className="mt-2">
           A tool is a function the model can ask the system to run, such as looking up past failed runs. It is not another
@@ -168,10 +168,10 @@ export default function ArchitectureTab() {
             <tbody className="divide-y divide-slate-200">
               {[
                 ["LLM input", "Goal and run history", "Plus literature, lab schedule and past scientist notes"],
-                ["LLM tools", "One: propose ratios", "Several: literature search, failure lookup, optimizer"],
-                ["LLM output", "Element set and route", "Plus a rationale a scientist can read"],
+                ["LLM tools", "None: code retrieves, one forced answer", "Several: literature search, failure lookup, optimizer"],
+                ["LLM output", "Search space and cited directions", "Plus a rationale a scientist can read"],
                 ["Risk model", "Hard-coded lookup", "A trained model"],
-                ["Planner mode", "Mock, no LLM call", "The LLM runs every batch"],
+                ["Setup agent mode", "Mock, no LLM call", "The LLM runs every batch"],
                 ["Workcell", "Simulated readings", "Robots, SEM and XRD instruments"],
               ].map(([k, a, b]) => (
                 <tr key={k}>

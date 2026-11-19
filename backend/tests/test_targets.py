@@ -64,4 +64,4 @@ def test_targets_line_for_the_planner_prompt():
 
 def test_loop_endpoint_serves_the_steps(client):
     steps = client.get("/api/loop").json()["steps"]
-    assert len(steps) == 11 and steps[0]["type"] == "person"
+    assert len(steps) == 10 and steps[0]["type"] == "person"

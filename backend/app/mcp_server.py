@@ -18,7 +18,7 @@ from typing import Any
 
 from . import db, telemetry
 from .chemistry import normalize_composition, normalize_processing
-from .optimizer import bayesian_optimizer
+from . import optimizer
 
 log = logging.getLogger(__name__)
 LITERATURE_PATH = Path(__file__).with_name("literature.json")
@@ -26,9 +26,17 @@ LITERATURE_PATH = Path(__file__).with_name("literature.json")
 
 # ---- tool implementations (shared by FastMCP and the direct fallback) -----------------
 
-def propose_alloy_ratios(elements: list[str], processing: str, n: int = 1) -> dict:
-    """Propose numeric alloy compositions (percent per element, summing to 100) for an element set and processing route."""
-    return bayesian_optimizer(elements, processing, n)
+def propose_alloy_ratios(
+    elements: list[str] | None = None,
+    processing: str | None = None,
+    n: int = 1,
+    search_space: dict | None = None,
+) -> dict:
+    """Optimizer: exact numeric ratios (percent per element, summing to 100). Give either a search space
+    (element ranges and routes) or one element set and one processing route. Scoring is a separate step."""
+    if search_space is not None:
+        return optimizer.in_space(search_space, n)
+    return optimizer.fixed_route(elements or [], processing or "", n)
 
 
 def check_negative_runs(composition: str, processing: str, campaign_id: str = "CAMP-014") -> dict:

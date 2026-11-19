@@ -164,6 +164,7 @@ export type PlanResult = {
   targets?: Targets | null;
   directions?: Direction[];
   literature_mode?: string;
+  search_space?: { elements: { symbol: string; min_pct: number; max_pct: number }[]; routes: string[] } | null;
   llm_totals?: LlmTotals;
   status: "paused" | "complete";
   thread_id: string;

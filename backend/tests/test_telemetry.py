@@ -52,9 +52,9 @@ def test_span_records_attributes_and_errors():
 
 
 def test_graph_runs_traced_nodes_without_a_provider():
-    from app.graph import retrieve_context
+    from app.graph import setup_agent_node
 
-    out = retrieve_context({"campaign_id": "CAMP-014"})
+    out = setup_agent_node({"campaign_id": "CAMP-014"})
     assert out["history"]
 
 

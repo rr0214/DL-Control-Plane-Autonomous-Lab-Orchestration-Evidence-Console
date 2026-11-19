@@ -1,6 +1,6 @@
 # SDL Control Plane: Autonomous Lab Orchestration & Evidence Console
 
-A full-stack prototype of a compound agentic system for an autonomous materials lab. An LLM planner proposes alloy batches, a deterministic Policy Kernel gates them before any sample is made, and a LangGraph workflow pauses for a scientist whenever sensor data is ambiguous. Every decision leaves an evidence receipt and an OpenTelemetry-shaped trace.
+A full-stack prototype of a compound agentic system for an autonomous materials lab. A setup agent (one Claude call) sets a search space and an optimizer proposes alloy batches, a deterministic Policy Kernel gates them before any sample is made, and a LangGraph workflow pauses for a scientist whenever sensor data is ambiguous. Every decision leaves an evidence receipt and an OpenTelemetry-shaped trace.
 
 Built as a portfolio project to show product decisions: where the model is allowed to act, where code must decide, and where a human must sign off.
 
@@ -42,9 +42,9 @@ frontend (Next.js, Tailwind)            backend (FastAPI)
                               LangGraph StateGraph (CampaignOrchestrator)
                               SqliteSaver checkpoints every step
                                                        │
-  retrieve_context ─▶ propose_candidates ─▶ policy_kernel ─▶ triage_and_hitl
-   (SQLite history)   (LLM tool-calling      (deterministic,   (risky recipe: interrupt() BEFORE
-                       or mock + probes)      under 50 ms)      synthesis. Then scan triage for
+  setup_agent ─▶ optimizer ─▶ prediction_model ─▶ policy_kernel ─▶ triage_and_hitl
+   (one Claude    (mock, exact   (mock, scores     (deterministic,   (risky recipe: interrupt() BEFORE
+    call, or mock)  ratios)       candidates)       under 50 ms)      synthesis. Then scan triage for
                                                                 what was made: Green advances,
                                                                 Red early-kills.)
 ```
@@ -52,7 +52,7 @@ frontend (Next.js, Tailwind)            backend (FastAPI)
 ### Core platform vs pluggable parts
 
 - **Core harness (stable):** RBAC, the LangGraph orchestrator, the Policy Kernel, and the audit trail. Governance lives here, not in the model.
-- **Pluggable (swappable):** the Bayesian optimizer, the LLM planner, and the workcell telemetry feed. Each can be replaced without changing the harness.
+- **Pluggable (swappable):** the optimizer, the prediction model, the setup agent, and the workcell telemetry feed. Each can be replaced without changing the harness.
 
 ## Human-in-the-loop
 
@@ -94,8 +94,8 @@ Span attributes: `campaign_id`, `mcp_mode`, `policy_status` (Allowed or Blocked)
 |---|---|---|
 | Clean pass (new route for a known-good composition) | Pass | none |
 | Clean pass (novel composition) | Pass | none |
-| Hf (restricted element) proposed | Pass | `propose_candidates` (caught by the Policy Kernel) |
-| Repeat of Run-088 (Arc-Melt) | Pass | `propose_candidates` (caught by the Policy Kernel) |
+| Hf (restricted element) proposed | Pass | `optimizer` (caught by the Policy Kernel) |
+| Repeat of Run-088 (Arc-Melt) | Pass | `optimizer` (caught by the Policy Kernel) |
 | False-positive Yellow on a clean alloy (`cv_confidence` 0.94) | Fail | `triage_and_hitl` |
 | Blurry SEM scan auto-advanced (`cv_confidence` 0.86) | Fail | `triage_and_hitl` |
 

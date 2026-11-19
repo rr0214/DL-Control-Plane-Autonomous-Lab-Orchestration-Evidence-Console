@@ -8,6 +8,7 @@ const ROLES = ["Scientist (PI)", "Operator"];
 
 const ORIGIN_LABEL: Record<string, string> = {
   llm: "Model proposal",
+  optimizer: "Optimizer pick (inside the setup agent's search space)",
   boundary_probe: "Boundary probe (policy check)",
   yellow_control: "Demo Yellow control (sensor ambiguity)",
 };
@@ -36,7 +37,7 @@ function statusTone(status: string): "green" | "yellow" | "red" | "slate" {
 
 // Display only: "C-1" is shown as "Candidate 1". The underlying candidate_id is never changed.
 // Revise is hidden for now: it currently behaves like Reject (the recipe is held, nothing is re-queued).
-// Flip to true once Revise sends the recipe back to the planner. The backend still accepts "revise".
+// Flip to true once Revise sends the recipe back to the setup agent. The backend still accepts "revise".
 const SHOW_REVISE = false;
 
 const candidateLabel = (id: string) => id.replace(/^C-(\d+)$/, "Candidate $1");
@@ -244,8 +245,15 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
           {plan && (
             <div className="mt-3 border-t border-slate-200 pt-2 text-xs text-slate-700">
               <div className="mb-1 flex items-center gap-2 font-semibold text-slate-800">
-                Suggested directions <TypeChip type="LLM" mock={plan.literature_mode === "mock"} />
+                Setup agent: directions and search space <TypeChip type="LLM" mock={plan.literature_mode === "mock"} />
               </div>
+              {plan.search_space && (
+                <p className="mb-1 text-slate-600">
+                  Search space:{" "}
+                  {plan.search_space.elements.map((e) => `${e.symbol} ${e.min_pct}-${e.max_pct}%`).join(", ")}; routes{" "}
+                  {plan.search_space.routes.join(", ")}
+                </p>
+              )}
               {(plan.directions ?? []).length > 0 ? (
                 <ul className="list-disc space-y-1 pl-4">
                   {(plan.directions ?? []).map((d) => (
@@ -255,7 +263,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                   ))}
                 </ul>
               ) : (
-                <p className="text-slate-500">None. Without an API key this step is a plain lookup.</p>
+                <p className="text-slate-500">None. Without an API key this step is a plain lookup with no search space.</p>
               )}
             </div>
           )}

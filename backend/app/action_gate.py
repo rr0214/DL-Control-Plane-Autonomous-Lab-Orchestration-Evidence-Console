@@ -1,4 +1,4 @@
-"""The action gate (loop step 10). Plain code. The diagnosis agent only PROPOSES; this decides what is used.
+"""The action gate (loop step 9). Plain code. The diagnosis agent only PROPOSES; this decides what is used.
 
 The gate fails closed: anything it does not recognize or allow becomes "hold". It never releases a sample
 and never changes a recipe or a policy; the only actions that exist are re-measure and hold, and in this

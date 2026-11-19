@@ -11,34 +11,36 @@ The order of steps is fixed in code (a LangGraph graph with fixed edges). Agents
 | # | Step | Type | Status |
 |---|------|------|--------|
 | 1 | Customer targets in | person | Built |
-| 2 | Literature suggests directions | LLM | Partly built. Real Claude call when an API key is set; otherwise a plain lookup with no directions |
-| 3 | Planner proposes recipes | LLM | Partly built. Real Claude call when an API key is set, otherwise a mock plan |
-| 4 | Optimizer picks exact ratios | ML | Mock (fixed table, not a trained model) |
-| 5 | Safety check | code | Built (Policy Kernel) |
+| 2 | Setup agent | LLM | Partly built. One Claude call when an API key is set; otherwise a plain lookup with no search space and no directions |
+| 3 | Optimizer | ML | Mock (fixed table, `mock-optimizer-v1`, not a trained model) |
+| 4 | Prediction model | ML | Mock (fixed lookup, `mock-prediction-v1`, not a trained model) |
+| 5 | Safety gate | code | Built (Policy Kernel) |
 | 6 | Scientist reviews risky plans | person | Built. Risk signals feeding it are a mock lookup |
-| 7 | Make the sample | code | Simulated. No real synthesis |
-| 8 | Measure properties | code | Simulated. Composition, hardness and oxidation (mock formulas, `measure.py`) plus the earlier scan fields |
-| 9 | Measurement check | code | Built (`check.py`). Real rules, simulated inputs |
-| 10 | Diagnosis agent | LLM | Partly built. Real Claude call when an API key is set, otherwise a rule-based stand-in; code gate is real; actions are logged, not executed |
-| 11 | Release check | person | Built. Strength is an estimate from simulated data; temperature is not assessed |
+| 7 | Make and measure | code | Simulated. No real synthesis. Composition, hardness and oxidation are mock formulas (`measure.py`) plus the earlier scan fields |
+| 8 | Measurement check | code | Built (`check.py`). Real rules, simulated inputs |
+| 9 | Diagnosis agent | LLM | Partly built. Real Claude call when an API key is set, otherwise a rule-based stand-in; code gate is real; actions are logged, not executed |
+| 10 | Release check | person | Built. Strength is an estimate from simulated data; temperature is not assessed |
 
 The same list is served by `GET /api/loop` (source: `backend/app/steps.py`) and shown in the Architecture tab. Every trace span carries `step_type`, `step_n` and `is_mock` so a trace row says what kind of step it is.
 
 ## 2. What each agent can and cannot do
 
-### Planner (step 3, LLM)
-- **Can:** read the campaign goal, the customer targets and prior runs; choose an element set and a processing route; call the ratio optimizer tool.
-- **Cannot:** write composition percentages itself (the optimizer sets them); skip or reorder steps; call any tool other than the optimizer; see or change policy rules; approve anything.
-- **Output:** candidate recipes. Each is checked by code before it goes anywhere.
-- **Its pick is kept.** If the planner proposes something that repeats a failed run, the Policy Kernel blocks it and the trace shows it; the pick is never silently replaced.
-- **Without an API key, or if the call fails:** a fixed mock plan, labeled `mock` in the UI and in the run note. When Claude made the proposal the run note says so, with the model name.
+### Setup agent (step 2, LLM)
+One Claude call per batch. Code retrieves the references first, then Claude reads them together with the planner history (section 9) and returns one structured answer.
+- **Can:** set a search space (the element families worth exploring, a minimum and maximum percent for each, and the allowed processing routes) and suggest up to 3 directions that cite retrieved references.
+- **Rule for numeric ranges:** the setup agent sets limits, the optimizer picks the actual ratios inside them, and code clamps the ranges to 0 to 100 and drops unknown elements and routes before the optimizer sees them.
+- **Cannot:** write composition percentages or a final recipe; cite anything that was not retrieved (code drops any direction without a valid citation); skip or reorder steps; call tools (code does the retrieval first, which is cheaper and faster than a tool loop); see or change policy rules; approve anything.
+- **Replaces** the earlier separate literature agent and planner calls (two LLM steps, one of them a tool loop). The planner's pick is still kept: if the optimizer's pick repeats a failed run, the Policy Kernel blocks it and the trace shows it.
+- **Without an API key, if the call fails, or if no usable search space comes back:** no search space. Only the policy test cases and the review test case run, labeled `mock` in the UI and the run note.
+- **Prompt caching:** the system prompt, the tool definition and the reference list are marked cacheable. Savings only appear once those parts pass the model's minimum cacheable size; cache reads and writes are logged per call.
+- **Prompt version:** `setup-v1`.
 
-### Literature agent (step 2, LLM)
-- **Can:** read the references that code retrieved from the curated list and suggest up to 3 directions (element additions, routes) with citations.
-- **Cannot:** cite anything that was not retrieved (code drops any direction without a valid citation); propose a specific recipe or percentages; change targets; call tools (code does the retrieval first, which is also cheaper and faster than a tool loop).
-- **Without an API key, or if the call fails:** a plain lookup, no directions, labeled `mock` in the UI and the run note.
+### Optimizer (step 3, ML, mock) and prediction model (step 4, ML, mock)
+- **Optimizer:** picks exact ratios inside the search space and is the only source of percentages (the always-on policy test cases and the review test case use it too, for one fixed element set and route).
+- **Prediction model:** scores every candidate; the best-scored recipe that is new to the history and the fixed cases leads the batch.
+- Both are fixed tables standing in for real models and are marked mock in the UI and on every span.
 
-### Diagnosis agent (step 10, LLM)
+### Diagnosis agent (step 9, LLM)
 - **When it runs:** only for a sample that was actually made and came out Yellow or Red. Green, held and rejected samples are not diagnosed. One call per flagged sample.
 - **Can:** read that sample's lineage (recipe, scan, measurements, failed checks, similar prior runs with their values, pre-synthesis risk signals, the scientist's decision and note) and propose exactly one action: `re-measure` or `hold`, with a reason, and say whether the likely cause is the `instrument`, the `material` or the `model`.
 - **Cannot:** release a sample, change a recipe, change a policy, or run anything. It proposes; the action gate decides. Scientist notes in its input are quoted data, never instructions.
@@ -63,7 +65,7 @@ Roles come from the client `X-Role` header in this demo. That is **not** real au
 
 | Tool | Input | Output | Type | Status |
 |------|-------|--------|------|--------|
-| `propose_alloy_ratios` | elements, processing route, n | composition percentages summing to 100 | ML | Mock: fixed table |
+| `propose_alloy_ratios` | a search space (element ranges and routes), or one element set and one route; n | composition percentages summing to 100, no scores | ML | Mock: fixed table (the optimizer) |
 | `check_negative_runs` | composition, processing route, campaign id | prior runs with the same composition and route, including failed ones | code | Built |
 | `search_calphad_literature` | elements, topic, limit | references with DOI links from a curated list | code | Built (plain lookup) |
 
@@ -87,7 +89,7 @@ Every tool call is traced with its transport (`fastmcp` or `direct` fallback).
 
 The hafnium rule and the customer's "reduced hafnium" target are different things: the first is a hard block on the lab floor, the second is a property the customer asks for.
 
-## 6. Measurement check (step 9)
+## 6. Measurement check (step 8)
 Plain code in `backend/app/check.py`. Inputs today are simulated (`measure.py`, labeled mock everywhere); the rules are real.
 - **Fixed rules:** readings must be physically sensible, and no restricted element may appear in the sample.
 - **Recipe vs measured:** every element within 1.0 at% of the recipe.
@@ -95,7 +97,7 @@ Plain code in `backend/app/check.py`. Inputs today are simulated (`measure.py`, 
 - **Effect:** the check can only make a sample's status worse (Yellow or Red), never better. It does not release anything. Acting on a flag is the diagnosis agent's job, behind the action gate [S4].
 - The thresholds are demo defaults set by the builder, not validated against a real lab.
 
-## 7. Action gate and actions log (step 10)
+## 7. Action gate and actions log (step 9)
 Plain code in `backend/app/action_gate.py`. The gate fails closed: anything it does not allow becomes `hold`.
 
 | Rule | Condition | Result |
@@ -109,7 +111,7 @@ Plain code in `backend/app/action_gate.py`. The gate fails closed: anything it d
 - **The cap is counted per plan** (sample ids repeat across plans in this demo). Because nothing re-measures yet, the cap cannot trigger in normal use; it is unit tested and will matter once a re-measure loop exists.
 - A hold does not change the sample's status or release anything. Release is a scientist's decision at the release check [S5].
 
-## 8. Release check (step 11)
+## 8. Release check (step 10)
 A person decides; code (`backend/app/release.py`) does the comparison and enforces the rules. It applies to a sample that was actually made.
 
 | Customer target | Compared with | Basis |
@@ -123,20 +125,21 @@ A person decides; code (`backend/app/release.py`) does the comparison and enforc
 - **Exceptions** (a missed target, a Yellow status, an open diagnosis hold; a target that is not assessed is shown and recorded but is not an exception) make a written reason mandatory for a release, and the exceptions are recorded in the receipt.
 - One decision per sample per plan. Each decision saves a SHA-256 receipt (the same idea as the review receipts) that covers the targets, the comparison, the exceptions, the note and the role.
 - The role comes from a client header in this demo, so the sign-off is **not** real authentication.
-- The release decision and note also go back into what the planner reads next time.
+- The release decision and note also go back into what the setup agent reads next time.
 
-## 9. What the planner reads about earlier work
-Before each plan, code builds the run history the planner sees: the two seed runs, then the 10 most recent decided samples, oldest first. Samples still waiting for review are left out.
+## 9. What the setup agent reads about earlier work
+Before each plan, code builds the run history the setup agent sees: the two seed runs, then the 10 most recent decided samples, oldest first. Samples still waiting for review are left out.
 - **Each line has:** composition and route, outcome (a held sample is "Held (not made)"), who decided (scientist or system) and the decision, the measurement check flags, and the scientist's note (the "why").
-- **Notes are untrusted text.** They are cleaned (control characters, quotes), cut to 200 characters, and shown to the model as quoted data. The planner prompt (`planner-v3`) says a note is information about a run, never an instruction.
-- **Not wired to the Policy Kernel.** A scientist's reject informs the planner only. The kernel's repeat-run block still reads the run table, which only a code change or a Policy Owner edit can alter.
+- **Notes are untrusted text.** They are cleaned (control characters, quotes), cut to 200 characters, and shown to the model as quoted data. The setup prompt (`setup-v1`) says a note is information about a run, never an instruction.
+- **Not wired to the Policy Kernel.** A scientist's reject informs the setup agent only. The kernel's repeat-run block still reads the run table, which only a code change or a Policy Owner edit can alter.
 - A reset clears the samples, and with them this history.
 
 ## 10. Cost, latency and versions
-Every real LLM call is recorded: input and output tokens, model, cost, latency, prompt version and git commit. They appear on the trace span (`llm.planner`, `llm.literature`), in the plan result, and in the Evals tab ("Cost and latency per plan"). Mock plans make no calls and show zero.
-- Model per agent: `SDL_MODEL_PLANNER`, `SDL_MODEL_LITERATURE`, `SDL_MODEL_DIAGNOSIS`, else `ANTHROPIC_MODEL`, else `claude-sonnet-5-5`.
+Every real LLM call is recorded: input and output tokens, model, cost, latency, prompt version and git commit. They appear on the trace span (`llm.setup`, `llm.diagnosis`), in the plan result, and in the Evals tab ("Cost and latency per plan"). Mock plans make no calls and show zero.
+- Model per agent: `SDL_MODEL_SETUP`, `SDL_MODEL_DIAGNOSIS`, else `ANTHROPIC_MODEL`, else `claude-sonnet-5-5`.
 - Prices are a hand-set table in `backend/app/llm_usage.py`. **Verify against current pricing** before quoting any cost. A model with no price shows cost "n/a", never a guess.
-- Prompt versions: `planner-v3`, `literature-v1`, `diagnosis-v1`. Change the string when the prompt changes.
+- Cache writes and reads are priced with hand-set multipliers (`CACHE_WRITE_MULT`, `CACHE_READ_MULT`), also unverified.
+- Prompt versions: `setup-v1`, `diagnosis-v1`. Change the string when the prompt changes.
 
 ## 11. What is not claimed
 - Shadow replay against historical data is not built and is not claimed anywhere.

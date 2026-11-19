@@ -29,9 +29,9 @@ def anthropic_model() -> str:
 
 
 # Per-agent model choice. Each agent reads its own setting, then ANTHROPIC_MODEL, then the default.
-# Example: SDL_MODEL_PLANNER=claude-opus-5-5 to try a bigger planner while the others stay on Sonnet.
+# Example: SDL_MODEL_SETUP=claude-opus-5-5 to try a bigger setup agent while the others stay on Sonnet.
 DEFAULT_MODEL = "claude-sonnet-5-5"
-AGENTS = ("planner", "literature", "diagnosis")
+AGENTS = ("setup", "diagnosis")
 
 
 def agent_model(agent: str) -> str:

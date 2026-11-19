@@ -21,6 +21,10 @@ PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-opus-5-5": (5.00, 25.00),
     "claude-haiku-5-5": (1.00, 5.00),
 }
+# Prompt caching multipliers on the input price: writing to the cache costs more, reading from it costs less.
+# Manually entered like the prices above. VERIFY AGAINST CURRENT PRICING.
+CACHE_WRITE_MULT = 1.25
+CACHE_READ_MULT = 0.10
 PRICE_NOTE = "Prices are set by hand in backend/app/llm_usage.py. Verify against current pricing before quoting a cost."
 
 
@@ -42,11 +46,20 @@ def git_commit() -> str:
         return "unknown"
 
 
-def cost_usd(model: str, input_tokens: int, output_tokens: int) -> float | None:
+def cost_usd(
+    model: str, input_tokens: int, output_tokens: int, cache_write_tokens: int = 0, cache_read_tokens: int = 0
+) -> float | None:
+    """input_tokens are the uncached input tokens; cache writes and reads are priced separately."""
     price = PRICES_USD_PER_MTOK.get(model)
     if price is None:
         return None
-    return round((input_tokens * price[0] + output_tokens * price[1]) / 1_000_000, 6)
+    total = (
+        input_tokens * price[0]
+        + cache_write_tokens * price[0] * CACHE_WRITE_MULT
+        + cache_read_tokens * price[0] * CACHE_READ_MULT
+        + output_tokens * price[1]
+    )
+    return round(total / 1_000_000, 6)
 
 
 def call(client: Any, *, agent: str, prompt_version: str, **kwargs: Any) -> tuple[Any, dict]:
@@ -59,12 +72,16 @@ def call(client: Any, *, agent: str, prompt_version: str, **kwargs: Any) -> tupl
         usage = getattr(response, "usage", None)
         input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
         output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
-        cost = cost_usd(model, input_tokens, output_tokens)
+        cache_write = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+        cache_read = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+        cost = cost_usd(model, input_tokens, output_tokens, cache_write, cache_read)
         record = {
             "agent": agent,
             "model": model,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "cache_write_tokens": cache_write,
+            "cache_read_tokens": cache_read,
             "cost_usd": cost,
             "latency_ms": latency_ms,
             "prompt_version": prompt_version,
@@ -77,6 +94,8 @@ def call(client: Any, *, agent: str, prompt_version: str, **kwargs: Any) -> tupl
                 "llm.token_count.prompt": input_tokens,
                 "llm.token_count.completion": output_tokens,
                 "llm.token_count.total": input_tokens + output_tokens,
+                "llm.token_count.cache_write": cache_write,
+                "llm.token_count.cache_read": cache_read,
                 "llm.cost_usd": cost,
                 "llm.latency_ms": latency_ms,
             },
@@ -91,6 +110,8 @@ def totals(records: list[dict]) -> dict:
         "calls": len(records),
         "input_tokens": sum(r["input_tokens"] for r in records),
         "output_tokens": sum(r["output_tokens"] for r in records),
+        "cache_write_tokens": sum(r.get("cache_write_tokens", 0) for r in records),
+        "cache_read_tokens": sum(r.get("cache_read_tokens", 0) for r in records),
         "cost_usd": None if (not records or any(c is None for c in costs)) else round(sum(costs), 6),
         "latency_ms": round(sum(r["latency_ms"] for r in records), 1),
         "models": sorted({r["model"] for r in records}),

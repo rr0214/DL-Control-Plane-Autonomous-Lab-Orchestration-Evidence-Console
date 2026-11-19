@@ -1,4 +1,4 @@
-"""The CampaignOrchestrator LangGraph: retrieve -> propose -> policy gate -> triage (HITL).
+"""The CampaignOrchestrator LangGraph: setup agent -> optimizer -> prediction model -> safety gate -> review (HITL) -> diagnosis.
 
 Tool use goes through the MCP gateway (mcp_server.gateway), so every tool call is
 recorded with its transport (fastmcp or direct) in state.tool_calls.
@@ -13,7 +13,7 @@ from langgraph.errors import GraphBubbleUp
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
-from . import action_gate, check, db, diagnosis, history, literature, measure, policy_kernel, presynthesis, proposer, telemetry, workcell
+from . import action_gate, check, config, db, diagnosis, history, measure, policy_kernel, prediction_model, presynthesis, proposer, setup_agent, telemetry, workcell
 from .mcp_server import gateway
 
 CAMPAIGN_ELEMENTS = ["Nb", "Ti", "Cr", "Al"]
@@ -30,6 +30,9 @@ class CampaignState(TypedDict, total=False):
     literature: list[dict[str, Any]]
     directions: list[dict[str, Any]]
     literature_mode: str
+    search_space: dict[str, Any] | None
+    fixed_candidates: list[dict[str, Any]]
+    space_candidates: list[dict[str, Any]]
     llm_usage: list[dict[str, Any]]
     llm_mode: str
     notes: list[str]
@@ -53,11 +56,9 @@ def traced_node(name: str):
                 try:
                     result = fn(state)
                     # A step that is an LLM step in the loop is a mock when no real LLM call happened.
-                    if name == "propose_candidates":
-                        sp.set_attribute("is_mock", result.get("llm_mode") == "mock")
-                    elif name == "diagnose_flagged":
+                    if name == "diagnose_flagged":
                         sp.set_attribute("is_mock", result.get("diagnosis_mode") == "mock")
-                    elif name == "retrieve_context":
+                    elif name == "setup_agent":
                         sp.set_attribute("is_mock", result.get("literature_mode") == "mock")
                     return result
                 except GraphBubbleUp:
@@ -69,8 +70,8 @@ def traced_node(name: str):
     return deco
 
 
-@traced_node("retrieve_context")
-def retrieve_context(state: CampaignState) -> dict[str, Any]:
+@traced_node("setup_agent")
+def setup_agent_node(state: CampaignState) -> dict[str, Any]:
     conn = db.connect()
     try:
         campaign = db.get_campaign(conn, state["campaign_id"])
@@ -81,39 +82,59 @@ def retrieve_context(state: CampaignState) -> dict[str, Any]:
         conn.close()
     # Targets passed in with the plan win; otherwise use the campaign's own.
     targets = state.get("targets") or campaign["targets"]
-    lit = literature.run(campaign["goal"], targets, CAMPAIGN_ELEMENTS, gateway.call)
+    out = setup_agent.run(campaign["goal"], targets, prior, CAMPAIGN_ELEMENTS, gateway.call)
     return {
         "goal": campaign["goal"],
         "targets": targets,
         "scope": {"tenant": campaign["tenant"], "export_control": campaign["export_control"]},
         "history": prior,
         "references": references,
-        "literature": lit["references"],
-        "directions": lit["directions"],
-        "literature_mode": lit["mode"],
-        "llm_usage": [*state.get("llm_usage", []), *lit["usage"]],
-        "tool_calls": [*state.get("tool_calls", []), *lit["tool_calls"]],
-        "notes": [f"Loaded {len(prior)} prior runs and {len(lit['references'])} literature references", lit["note"]],
+        "literature": out["references"],
+        "directions": out["directions"],
+        "literature_mode": out["mode"],
+        "search_space": out["space"],
+        "llm_usage": [*state.get("llm_usage", []), *out["usage"]],
+        "tool_calls": [*state.get("tool_calls", []), *out["tool_calls"]],
+        "notes": [f"Loaded {len(prior)} prior runs and {len(out['references'])} literature references", out["note"]],
     }
 
 
-@traced_node("propose_candidates")
-def propose_candidates(state: CampaignState) -> dict[str, Any]:
-    usage: list[dict] = []
-    candidates, mode, note, calls = proposer.propose(
-        state["goal"],
-        state["history"],
-        gateway.call,
-        targets=state.get("targets"),
-        directions=state.get("directions"),
-        usage=usage,
-    )
+@traced_node("optimizer")
+def optimizer_node(state: CampaignState) -> dict[str, Any]:
+    """Loop step 3 (mock). Exact ratios inside the search space, plus the fixed probes and control."""
+    fixed, calls = proposer.fixed_rows(gateway.call)
+    space_candidates: list[dict] = []
+    space = state.get("search_space")
+    if space:
+        output, transport = gateway.call("propose_alloy_ratios", {"search_space": space, "n": 6})
+        calls.append({"tool": "propose_alloy_ratios", "transport": transport, "args": {"search_space": True}})
+        space_candidates = proposer.space_rows(output)
     return {
-        "llm_usage": [*state.get("llm_usage", []), *usage],
-        "candidates": candidates,
-        "llm_mode": mode,
-        "notes": [*state.get("notes", []), note],
+        "fixed_candidates": fixed,
+        "space_candidates": space_candidates,
         "tool_calls": [*state.get("tool_calls", []), *calls],
+    }
+
+
+@traced_node("prediction_model")
+def prediction_model_node(state: CampaignState) -> dict[str, Any]:
+    """Loop step 4 (mock). Scores every candidate, then the best new recipe leads the batch."""
+    fixed = prediction_model.score(state["fixed_candidates"])
+    scored = prediction_model.score(state.get("space_candidates", []))
+    chosen = proposer.pick(scored, fixed, state["history"]) if scored else []
+    if chosen:
+        pick = chosen[0]
+        note = (
+            f"Claude ({config.agent_model('setup')}) set the search space; the optimizer proposed {len(scored)} candidate(s) inside it "
+            f"and the prediction model picked {pick['composition']} via {pick['processing']}; "
+            "ratios came from propose_alloy_ratios; boundary probes and review control appended"
+        )
+    else:
+        note = "No search space, so only the boundary probes and the review control run (mock plan)"
+    return {
+        "candidates": proposer.assemble(chosen, fixed),
+        "llm_mode": "anthropic" if chosen else "mock",
+        "notes": [*state.get("notes", []), note],
     }
 
 
@@ -228,7 +249,7 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
             triage_status=status,
         ):
             pass
-        # Loop step 8: simulated property measurements. Step 9: the measurement check (plain code).
+        # Loop step 7: make and measure (simulated). Step 8: the measurement check (plain code).
         with telemetry.span("measure.sample", campaign_id=state.get("campaign_id"), candidate_id=cand["candidate_id"]) as msp:
             measurements = measure.measure(cand["composition"], cand["processing"])
             msp.set_attribute("hardness_hv", measurements["hardness_hv"])
@@ -260,7 +281,7 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
 
 @traced_node("diagnose_flagged")
 def diagnose_flagged(state: CampaignState) -> dict[str, Any]:
-    """Loop step 10. For each sample that was made and came out Yellow or Red, the diagnosis agent proposes an
+    """Loop step 9. For each sample that was made and came out Yellow or Red, the diagnosis agent proposes an
     action and the action gate decides. Nothing is executed; the result is logged and shown."""
     triage = [dict(r) for r in state.get("triage", [])]
     usage: list[dict[str, Any]] = []
@@ -302,14 +323,16 @@ def diagnose_flagged(state: CampaignState) -> dict[str, Any]:
 
 def build_graph(checkpointer):
     graph = StateGraph(CampaignState)
-    graph.add_node("retrieve_context", retrieve_context)
-    graph.add_node("propose_candidates", propose_candidates)
+    graph.add_node("setup_agent", setup_agent_node)
+    graph.add_node("optimizer", optimizer_node)
+    graph.add_node("prediction_model", prediction_model_node)
     graph.add_node("policy_kernel", policy_kernel_node)
     graph.add_node("triage_and_hitl", triage_and_hitl)
     graph.add_node("diagnose_flagged", diagnose_flagged)
-    graph.add_edge(START, "retrieve_context")
-    graph.add_edge("retrieve_context", "propose_candidates")
-    graph.add_edge("propose_candidates", "policy_kernel")
+    graph.add_edge(START, "setup_agent")
+    graph.add_edge("setup_agent", "optimizer")
+    graph.add_edge("optimizer", "prediction_model")
+    graph.add_edge("prediction_model", "policy_kernel")
     graph.add_edge("policy_kernel", "triage_and_hitl")
     graph.add_edge("triage_and_hitl", "diagnose_flagged")
     graph.add_edge("diagnose_flagged", END)

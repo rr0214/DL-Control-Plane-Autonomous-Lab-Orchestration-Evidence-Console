@@ -96,19 +96,20 @@ def build_trace(
 
     root = add("campaign.plan", None, 0, {"thread_id": thread_id, "llm.mode": llm_mode, "simulated": True})
     cursor = 0.0
-    retrieve = add("retrieve_context", root, 12.0, {"db.system": "sqlite"})
+    setup = add("setup_agent", root, 12.0 + (850.0 if llm_mode == "anthropic" else 0.0), {"db.system": "sqlite", "llm.mode": llm_mode})
     cursor += 12.0
-    propose_ms = 850.0 if llm_mode == "anthropic" else 4.0
-    propose = add("propose_candidates", root, propose_ms, {"llm.mode": llm_mode})
+    optimize_ms = 4.0
+    opt = add("optimizer", root, optimize_ms, {"llm.mode": llm_mode})
     for i, cand in enumerate(candidates, 1):
         add(
-            "bayesian_optimizer",
-            propose,
+            "mcp.propose_alloy_ratios",
+            opt,
             2.0,
-            {"tool.name": "bayesian_optimizer", "candidate_id": cand["candidate_id"], "origin": cand.get("origin")},
+            {"tool.name": "propose_alloy_ratios", "candidate_id": cand["candidate_id"], "origin": cand.get("origin")},
             index=i,
         )
-    cursor += propose_ms
+    add("prediction_model", root, 1.0, {"candidates": len(candidates)})
+    cursor += optimize_ms
 
     gate = add("policy_kernel", root, sum(v["latency_ms"] for v in verdicts), {
         "policy.checked": len(verdicts),

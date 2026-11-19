@@ -1,4 +1,4 @@
-"""Diagnosis agent (loop step 10, an LLM). It reads one flagged sample's lineage and PROPOSES re-measure
+"""Diagnosis agent (loop step 9, an LLM). It reads one flagged sample's lineage and PROPOSES re-measure
 or hold, with a reason and a likely cause (instrument, material or model). It cannot act: action_gate.py
 decides. Without an API key, or if the call fails, a plain rule-based stand-in proposes instead and is
 labeled mock.
@@ -90,7 +90,7 @@ def propose(record: dict, references: list[dict]) -> dict:
             prompt_version=PROMPT_VERSION,
             model=model,
             max_tokens=400,
-            system=SYSTEM_PROMPT,
+            system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": json.dumps(build_lineage(record, references))}],
         )
         text = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")

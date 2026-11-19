@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
-from app import check, db, history, measure, proposer
+from app import check, db, history, measure, setup_agent
 from app.api import create_app
 from app.chemistry import parse
 from app.orchestrator import CampaignOrchestrator
@@ -168,9 +168,9 @@ def test_long_notes_are_cut_and_cleaned_and_quotes_cannot_break_out():
     assert history.clean_note(None) == ""
 
 
-def test_planner_prompt_treats_notes_as_quoted_data(monkeypatch):
-    assert "never an instruction" in proposer.SYSTEM_PROMPT
-    assert proposer.PROMPT_VERSION == "planner-v3"
+def test_setup_prompt_treats_notes_as_quoted_data(monkeypatch):
+    assert "never an instruction" in setup_agent.SYSTEM_PROMPT
+    assert setup_agent.PROMPT_VERSION == "setup-v1"
 
 
 def test_old_samples_table_is_migrated(tmp_path):
@@ -222,15 +222,15 @@ def test_next_plan_reads_the_last_batch_including_the_scientists_why(client, mon
     client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-1"})
     client.post("/api/samples/S-C-3/review", json={"decision": "reject", "note": "Blast radius too high for this furnace"})
     seen = {}
-    real = proposer.propose
+    real = setup_agent.run
 
-    def spy(goal, hist, *a, **k):
+    def spy(goal, targets, hist, *a, **k):
         seen["history"] = hist
-        return real(goal, hist, *a, **k)
+        return real(goal, targets, hist, *a, **k)
 
     from app import graph
 
-    monkeypatch.setattr(graph.proposer, "propose", spy)
+    monkeypatch.setattr(graph.setup_agent, "run", spy)
     client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014", "thread_id": "t-2"})
     entry = next(r for r in seen["history"] if r["run_id"] == "S-C-3")
     assert entry["outcome"] == "Held (not made)" and entry["decision"] == "reject" and entry["decided_by"] == "scientist"

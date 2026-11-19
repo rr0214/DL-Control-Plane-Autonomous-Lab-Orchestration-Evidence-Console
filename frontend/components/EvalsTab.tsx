@@ -14,7 +14,7 @@ const METHOD: { step: string; today: string; next: string }[] = [
   {
     step: "1. Read traces",
     today: "Live runs and 6 seeded examples in Phoenix",
-    next: "50 to 100 scenarios, including real planner runs",
+    next: "50 to 100 scenarios, including real setup agent runs",
   },
   {
     step: "2. Mark Pass/Fail and the first failure",
@@ -29,7 +29,7 @@ const METHOD: { step: string; today: string; next: string }[] = [
   {
     step: "4. Build a check per mode",
     today: "2 plain-code checks, no LLM judge",
-    next: "More code checks, then a judge for the planner's rationale, validated against human labels",
+    next: "More code checks, then a judge for the setup agent's rationale, validated against human labels",
   },
   {
     step: "5. Feed overrides back",

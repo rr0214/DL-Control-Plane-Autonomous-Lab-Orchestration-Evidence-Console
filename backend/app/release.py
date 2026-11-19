@@ -1,4 +1,4 @@
-"""The release checkpoint (loop step 11). A person decides; this file does the comparison and the rules.
+"""The release checkpoint (loop step 10). A person decides; this file does the comparison and the rules.
 
 Results are compared with the customer's targets. What each comparison rests on:
   - temperature: NOT ASSESSED. Nothing measures service temperature, and a pass or fail from a made-up formula

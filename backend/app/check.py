@@ -1,4 +1,4 @@
-"""The measurement check (loop step 9). Plain code, no model. Three kinds of rule:
+"""The measurement check (loop step 8). Plain code, no model. Three kinds of rule:
 
 1. Fixed rules: readings must be physically sensible, and no restricted element may show up in the sample.
 2. Recipe vs measured composition: each element within TOLERANCE_AT_PCT of the recipe.
