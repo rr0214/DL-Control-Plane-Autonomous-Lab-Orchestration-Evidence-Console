@@ -1,5 +1,9 @@
 .env
-backend/data/
+backend/data/*
+# S6: commit the 30 cases; results.json, the CSV and the work folder stay local
+!backend/data/s6/
+backend/data/s6/*
+!backend/data/s6/cases.json
 *.sqlite
 __pycache__/
 *.pyc

@@ -141,7 +141,14 @@ Every real LLM call is recorded: input and output tokens, model, cost, latency, 
 - Cache writes and reads are priced with hand-set multipliers (`CACHE_WRITE_MULT`, `CACHE_READ_MULT`), also unverified.
 - Prompt versions: `setup-v1`, `diagnosis-v1`. Change the string when the prompt changes.
 
-## 11. What is not claimed
+## 11. S6: test cases, runner and trace review
+Three small tools produce the material for error analysis (reading traces and writing open notes before building any evaluator).
+- **Cases** (`backend/app/synth_cases.py`, committed as `backend/data/s6/cases.json`): 30 deterministic cases. 24 spread over the grid of customer targets (loose, default, tight, impossible), history (seed only, passes, mixed, a rejected sample with a note, a note that tries to give an instruction), scientist action (approve, revise, reject, no action) and release attempt (reason, short note, withhold, none; only tried after an approval); 4 hand-written adversarial cases; 2 on the mock fallback path. 28 run on real Claude.
+- **Runner** (`backend/app/s6_runner.py`): sends each case through the real loop (plan, scientist action, release attempt) with Phoenix tracing on, one trace per case, in the Phoenix project `sdl-s6`. Each case runs on its own throwaway database so the real campaign history is untouched. Total logged cost, LLM calls and cache hits are printed at the end. The batch stops before the next case once logged spend reaches the cap (default $3.00, `--max-usd`). Cost comes from the unverified price table, so it is an estimate. `--mock-only` runs every case without API calls.
+- **CSV** (`backend/app/s6_export.py`, written by the runner to `backend/data/s6/s6_cases.csv`): one row per case with `case_id`, `inputs`, `final_output` (a flattened one-line summary), `phoenix_trace_url` and an empty `notes` column. The link is blank when Phoenix is not running. `results.json` and the CSV are not committed.
+- **Not claimed:** the cases are builder-written, not sampled from real use, and there are no evaluators yet. Those come after the notes show which failure modes are real.
+
+## 12. What is not claimed
 - Shadow replay against historical data is not built and is not claimed anywhere.
 - Measurements are simulated; strength at release is an estimate from them and temperature is not assessed. Diagnosis actions are logged, not executed. Sign-off roles are not real authentication.
 - All numeric risk, ductility and instrument values are demo data unless the UI says otherwise.
