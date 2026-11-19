@@ -183,7 +183,7 @@ export default function EvalsTab() {
         </p>
         {!usage || usage.real_plans === 0 ? (
           <p className="mt-3 text-sm text-slate-600">
-            No real LLM plan yet ({usage?.mock_plans ?? 0} mock). Set an API key and run Plan next batch.
+            No real LLM plan yet ({usage?.mock_plans ?? 0} mock). Set an API key, then run Plan next batch in the Console tab.
           </p>
         ) : (
           <>

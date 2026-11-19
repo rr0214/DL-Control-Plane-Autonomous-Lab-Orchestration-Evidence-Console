@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import LoopStrip from "./LoopStrip";
 import ReleaseCard from "./ReleaseCard";
 import { API, CampaignView, PlanResult, SampleRecord, Span, Targets, TriageRecord, Verdict } from "@/lib/api";
 
@@ -9,8 +10,9 @@ const ROLES = ["Scientist (PI)", "Operator"];
 const ORIGIN_LABEL: Record<string, string> = {
   llm: "Model proposal",
   optimizer: "Optimizer pick (inside the setup agent's search space)",
-  boundary_probe: "Boundary probe (policy check)",
-  yellow_control: "Demo Yellow control (sensor ambiguity)",
+  boundary_probe: "Policy test case (checks the safety gate)",
+  yellow_control: "Review test case (forces a scientist review)",
+  mock_control: "Review test case (forces a scientist review)",
 };
 
 function Pill({ tone, children }: { tone: "green" | "yellow" | "red" | "slate" | "blue"; children: React.ReactNode }) {
@@ -59,22 +61,9 @@ function TypeChip({ type, mock = false }: { type: string; mock?: boolean }) {
   );
 }
 
-function StepHeader({ n, title, emphasis = false }: { n: number; title: string; emphasis?: boolean }) {
-  const label = `Step ${n}: ${title}`;
+function ColumnHeader({ title, emphasis = false }: { title: string; emphasis?: boolean }) {
   return (
-    <h2
-      className={`flex h-8 items-center gap-2 font-semibold tracking-tight text-slate-900 ${
-        emphasis ? "text-lg" : "text-base"
-      }`}
-    >
-      <span
-        aria-hidden
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white"
-      >
-        {n}
-      </span>
-      {label}
-    </h2>
+    <h2 className={`flex h-8 items-center font-semibold tracking-tight text-slate-900 ${emphasis ? "text-lg" : "text-base"}`}>{title}</h2>
   );
 }
 
@@ -122,6 +111,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
   const [error, setError] = useState<string | null>(null);
   const [selectedSample, setSelectedSample] = useState<string | null>(null);
   const [selectedSpan, setSelectedSpan] = useState<Span | null>(null);
+  const [releasePick, setReleasePick] = useState<string | null>(null);
   const [targets, setTargets] = useState<Targets | null>(null);
   const activeTargets = targets ?? campaign?.campaign.targets ?? null;
   const setTarget = (key: keyof Targets, value: string) =>
@@ -175,16 +165,31 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
   const allSamples: SampleRecord[] = [...(campaign?.seed_samples ?? []), ...(campaign?.live_samples ?? [])];
   const sample = allSamples.find((s) => s.sample_id === selectedSample) ?? null;
 
+  // Samples that were made and measured, newest first. A release decision takes a sample off the "ready" list.
+  const releasedBy = new Map<string, string>((campaign?.releases ?? []).map((r) => [r.sample_id, r.decision] as const));
+  const madeSamples = (campaign?.live_samples ?? []).filter((s) => s.measurements).slice(0, 5);
+  const readySamples = madeSamples.filter((s) => !releasedBy.has(s.sample_id));
+  const releaseId =
+    (releasePick && madeSamples.some((s) => s.sample_id === releasePick) ? releasePick : null) ??
+    readySamples[0]?.sample_id ??
+    madeSamples[0]?.sample_id ??
+    null;
+
+  // Where the current batch is on the loop strip (index into LOOP_STAGES).
+  const loopStage = !plan ? (busy ? 1 : 0) : pending ? 4 : readySamples.length > 0 ? 9 : 8;
+
   const spans = plan?.trace?.spans ?? campaign?.seed_trace?.spans ?? [];
   const spanById = new Map<string, Span>(spans.map((s) => [s.span_id, s] as const));
   const literature = plan?.literature ?? campaign?.literature ?? [];
   const traceLabel = plan ? `Trace for ${plan.thread_id}` : "Seed trace (CAMP-014)";
 
   return (
+    <div>
+    <LoopStrip current={loopStage} />
     <div className="grid gap-4 lg:grid-cols-12">
-      {/* Step 1 (left): goal and pre-flight gate */}
+      {/* Left: plan the batch (goal, targets, the Plan button) and the safety gate */}
       <section className="space-y-4 lg:col-span-3">
-        <StepHeader n={1} title="Campaign & Run" />
+        <ColumnHeader title="Plan the batch" />
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Goal</h2>
@@ -224,6 +229,28 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                 </label>
               ))}
             </div>
+          )}
+        </div>
+
+        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+          <button
+            onClick={runPlan}
+            disabled={busy}
+            className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          >
+            {busy ? "Working..." : "Plan next batch"}
+          </button>
+          {plan && (
+            <p className="mt-2 text-xs text-slate-500">
+              Mode: <span className="font-medium text-slate-700">{plan.llm_mode}</span>
+            </p>
+          )}
+          {plan?.llm_totals && plan.llm_totals.calls > 0 && (
+            <p className="mt-1 text-xs text-slate-500">
+              {plan.llm_totals.calls} LLM calls · {(plan.llm_totals.input_tokens + plan.llm_totals.output_tokens).toLocaleString()} tokens ·{" "}
+              {plan.llm_totals.cost_usd === null ? "cost n/a" : `$${plan.llm_totals.cost_usd.toFixed(4)}`} ·{" "}
+              {(plan.llm_totals.latency_ms / 1000).toFixed(1)}s
+            </p>
           )}
         </div>
 
@@ -270,29 +297,10 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
         </Collapsible>
 
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Pre-flight gate</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Safety gate</h2>
           <p className="mt-1 text-xs text-slate-500">
             The policy gate checks every recipe before any sample is made. No model can override it.
           </p>
-          <button
-            onClick={runPlan}
-            disabled={busy}
-            className="mt-3 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-          >
-            {busy ? "Working..." : "Plan next batch"}
-          </button>
-          {plan && (
-            <p className="mt-2 text-xs text-slate-500">
-              Mode: <span className="font-medium text-slate-700">{plan.llm_mode}</span>
-            </p>
-          )}
-          {plan?.llm_totals && plan.llm_totals.calls > 0 && (
-            <p className="mt-1 text-xs text-slate-500">
-              {plan.llm_totals.calls} LLM calls · {(plan.llm_totals.input_tokens + plan.llm_totals.output_tokens).toLocaleString()} tokens ·{" "}
-              {plan.llm_totals.cost_usd === null ? "cost n/a" : `$${plan.llm_totals.cost_usd.toFixed(4)}`} ·{" "}
-              {(plan.llm_totals.latency_ms / 1000).toFixed(1)}s
-            </p>
-          )}
           <ul className="mt-3 space-y-2">
             {(plan?.candidates ?? []).map((c) => {
               const v = verdictById.get(c.candidate_id);
@@ -329,21 +337,6 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
               );
             })}
           </ul>
-          {plan?.tool_calls?.length ? (
-            <div className="mt-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tool calls this run</h3>
-              <ul className="mt-1 space-y-1 font-mono text-[11px] text-slate-600">
-                {plan.tool_calls.map((tc, i) => (
-                  <li key={`${tc.tool}-${i}`} className="flex items-center justify-between gap-2">
-                    <span>{tc.tool}</span>
-                    <Pill tone={tc.transport === "fastmcp" ? "blue" : "slate"}>
-                      {tc.transport === "fastmcp" ? "FastMCP" : "direct"}
-                    </Pill>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
           {plan?.notes?.length ? (
             <ul className="mt-3 list-disc pl-4 text-xs text-slate-500">
               {plan.notes.map((n) => (
@@ -352,13 +345,27 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
             </ul>
           ) : null}
         </div>
+
+        {plan?.tool_calls?.length ? (
+          <Collapsible title="Technical details" badge={<Pill tone="slate">{plan.tool_calls.length}</Pill>}>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tool calls this run</h3>
+            <ul className="mt-1 space-y-1 font-mono text-[11px] text-slate-600">
+              {plan.tool_calls.map((tc, i) => (
+                <li key={`${tc.tool}-${i}`} className="flex items-center justify-between gap-2">
+                  <span>{tc.tool}</span>
+                  <Pill tone={tc.transport === "fastmcp" ? "blue" : "slate"}>{tc.transport === "fastmcp" ? "FastMCP" : "direct"}</Pill>
+                </li>
+              ))}
+            </ul>
+          </Collapsible>
+        ) : null}
       </section>
 
-      {/* Step 2 (center): live triage queue with the interactive HITL card. Widest, most prominent column. */}
+      {/* Center: before making. The live triage queue with the interactive review card. Widest column. */}
       <section className="space-y-4 lg:col-span-6">
-        <StepHeader n={2} title="Safety Triage Queue" emphasis />
+        <ColumnHeader title="Before making" emphasis />
         <p className="-mt-2 text-sm text-slate-500">
-          A scientist reviews risky recipes here, before any sample is made.
+          The safety triage queue. A scientist reviews risky recipes here, before any sample is made.
         </p>
         {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200">{error}</div>}
 
@@ -420,7 +427,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={280}
-              placeholder="One-line intuition note (optional)"
+              placeholder="One-line scientist note (optional)"
               className="mt-2 w-full rounded-md border border-amber-300 bg-white p-2 text-sm"
               rows={2}
             />
@@ -530,9 +537,48 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
         </div>
       </section>
 
-      {/* Step 3 (right): decision receipt, with the span inspector tucked away */}
+      {/* Right: after measuring and release. Release is visible without clicking a sample. */}
       <section className="space-y-4 lg:col-span-3">
-        <StepHeader n={3} title="Decision Receipt" />
+        <ColumnHeader title="After measuring and release" />
+        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Ready for release</h2>
+            <Pill tone={readySamples.length ? "green" : "slate"}>{readySamples.length}</Pill>
+          </div>
+          {madeSamples.length === 0 ? (
+            <p className="mt-2 text-xs text-slate-500">No sample has been made and measured yet. Approve a recipe and it appears here.</p>
+          ) : (
+            <ul className="mt-2 space-y-1">
+              {madeSamples.map((s) => {
+                const decided = releasedBy.get(s.sample_id);
+                return (
+                  <li key={s.sample_id}>
+                    <button
+                      onClick={() => setReleasePick(s.sample_id)}
+                      className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-xs ring-1 hover:bg-slate-50 ${
+                        releaseId === s.sample_id ? "bg-slate-50 ring-slate-400" : "ring-slate-200"
+                      }`}
+                    >
+                      <span>
+                        <span className="font-mono text-slate-800">{s.sample_id}</span>
+                        <span className="ml-1 font-mono text-[11px] text-slate-500">{s.composition}</span>
+                      </span>
+                      <Pill tone={decided ? (decided === "release" ? "green" : "red") : "yellow"}>
+                        {decided ? (decided === "release" ? "Released" : "Withheld") : s.status ?? "Ready"}
+                      </Pill>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {releaseId && (
+            <div className="mt-3 border-t border-slate-200 pt-3">
+              <ReleaseCard key={releaseId} sampleId={releaseId} role={role} onChange={onChange} />
+            </div>
+          )}
+        </div>
+
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Evidence and lineage</h2>
@@ -560,10 +606,9 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                   {sample.receipt.instrument} · {sample.receipt.recorded_at} · {sample.receipt.signed_by}
                 </div>
               </div>
-              {sample.measurements && <ReleaseCard sampleId={sample.sample_id} role={role} onChange={onChange} />}
             </div>
           ) : (
-            <p className="mt-2 text-xs text-slate-500">Select a sample in the triage queue to see its receipt.</p>
+            <p className="mt-2 text-xs text-slate-500">Select a sample in the triage queue to see its decision receipt.</p>
           )}
         </div>
 
@@ -589,7 +634,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
         <Collapsible title="Span inspector">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-slate-500">{traceLabel}</p>
-            <Pill tone="slate">OpenTelemetry (simulated)</Pill>
+            <Pill tone="slate">OpenTelemetry, also sent to Phoenix</Pill>
           </div>
           <ul className="mt-2 max-h-72 space-y-0.5 overflow-auto font-mono text-xs">
             {spans.map((s) => (
@@ -617,6 +662,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
           )}
         </Collapsible>
       </section>
+    </div>
     </div>
   );
 }

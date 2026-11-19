@@ -215,6 +215,7 @@ export type CampaignView = {
   seed_samples: SampleRecord[];
   live_samples: SampleRecord[];
   actions?: ActionRow[];
+  releases?: { sample_id: string; decision: string; note?: string }[];
   plans: { thread_id: string; status: string; llm_mode: string | null; created_at: string }[];
   seed_trace: Trace;
   literature: Literature[];
