@@ -147,8 +147,10 @@ class ToolGateway:
     def call(self, name: str, args: dict[str, Any]) -> tuple[dict, str]:
         """Returns (result, transport). transport is 'fastmcp' or 'direct'."""
         with telemetry.span(f"mcp.{name}", kind="TOOL", tool=name) as sp:
+            telemetry.record_io(sp, input=args)
             result, transport = self._dispatch(name, args)
             sp.set_attribute("mcp_mode", transport)
+            telemetry.record_io(sp, output=result)
             return result, transport
 
     def _dispatch(self, name: str, args: dict[str, Any]) -> tuple[dict, str]:

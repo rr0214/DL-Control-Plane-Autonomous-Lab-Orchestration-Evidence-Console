@@ -134,6 +134,26 @@ def describe_space(space: dict) -> str:
     return f"{parts}; routes {', '.join(space['routes'])}"
 
 
+def summarize_answer(response, refs: list[dict]) -> dict:
+    """Span attributes that show the setup agent's decision in plain text: the search space and the cited directions."""
+    use = next((b for b in response.content if getattr(b, "type", "") == "tool_use" and b.name == SETUP_TOOL["name"]), None)
+    if use is None:
+        return {"setup.result": "no tool call in the response"}
+    raw = dict(use.input)
+    space = clean_space(raw)
+    proposed = raw.get("directions") if isinstance(raw.get("directions"), list) else []
+    kept = keep_cited(proposed, refs)
+    return {
+        "setup.result": "valid search space" if space else "search space did not validate",
+        "setup.search_space": describe_space(space) if space else "none",
+        "setup.routes": ", ".join(space["routes"]) if space else "none",
+        "setup.directions": "\n".join(f"{d['direction']}  [cites {', '.join(d['cited_ids'])}]" for d in kept) or "none",
+        "setup.directions_proposed": len(proposed),
+        "setup.directions_kept": len(kept),
+        "setup.directions_dropped_uncited": len(proposed) - len(kept),
+    }
+
+
 def run(goal: str, targets: dict | None, history: list[dict], elements: list[str], call: ToolCall) -> dict:
     """Returns {references, directions, space, mode, note, usage, tool_calls}. mode is 'anthropic' or 'mock'."""
     lit, transport = call("search_calphad_literature", {"elements": elements, "topic": None, "limit": 3})
@@ -180,6 +200,7 @@ def run(goal: str, targets: dict | None, history: list[dict], elements: list[str
                 tools=[SETUP_TOOL],
                 # Some models reject a forced tool choice, so ask in the prompt and let code check the answer.
                 tool_choice={"type": "auto"},
+                summarize=lambda resp: summarize_answer(resp, refs),
                 messages=[
                     {
                         "role": "user",

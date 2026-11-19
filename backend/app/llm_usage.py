@@ -62,12 +62,48 @@ def cost_usd(
     return round(total / 1_000_000, 6)
 
 
-def call(client: Any, *, agent: str, prompt_version: str, **kwargs: Any) -> tuple[Any, dict]:
-    """client.messages.create(**kwargs) plus a usage record and a span. kwargs must include model."""
+def _block_text(block: Any) -> str:
+    kind = block.get("type") if isinstance(block, dict) else getattr(block, "type", "")
+    get = (lambda k, d=None: block.get(k, d)) if isinstance(block, dict) else (lambda k, d=None: getattr(block, k, d))
+    if kind == "text":
+        return str(get("text", ""))
+    if kind == "tool_use":
+        return f"[tool call {get('name')}] {telemetry.readable(dict(get('input') or {}), 4000)}"
+    return ""
+
+
+def messages_text(messages: list) -> str:
+    """The prompt as plain text, the way the model read it."""
+    out = []
+    for m in messages or []:
+        content = m["content"] if isinstance(m, dict) else getattr(m, "content", "")
+        body = content if isinstance(content, str) else "\n".join(t for t in (_block_text(b) for b in content) if t)
+        out.append(f"{(m['role'] if isinstance(m, dict) else m.role).upper()}:\n{body}")
+    return "\n\n".join(out)
+
+
+def response_text(response: Any) -> str:
+    """What the model answered, as plain text. A tool call shows its name and its arguments."""
+    return "\n".join(t for t in (_block_text(b) for b in getattr(response, "content", []) or []) if t)
+
+
+def call(client: Any, *, agent: str, prompt_version: str, summarize: Any = None, **kwargs: Any) -> tuple[Any, dict]:
+    """client.messages.create(**kwargs) plus a usage record and a span. kwargs must include model.
+    The span records the prompt and the answer as readable text. `summarize(response)` may return extra
+    attributes (the agent's parsed result) so the decision is readable without opening the raw answer."""
     model = kwargs["model"]
     with telemetry.span(f"llm.{agent}", kind="LLM", agent=agent, prompt_version=prompt_version, git_commit=git_commit()) as sp:
+        system = kwargs.get("system")
+        system_text = system if isinstance(system, str) else "\n".join(_block_text(b) for b in (system or []))
+        telemetry.record_io(sp, input=messages_text(kwargs.get("messages", [])), **{"llm.system_prompt": telemetry.readable(system_text)} if system_text else {})  # input first, so a failed call still shows what was sent
         started = time.perf_counter()
         response = client.messages.create(**kwargs)
+        telemetry.record_io(sp, output=response_text(response) or "(empty response)")
+        if summarize is not None:
+            try:
+                telemetry.set_attrs(sp, summarize(response))
+            except Exception as exc:  # a summary bug must never break the call
+                sp.set_attribute("summary_error", f"{type(exc).__name__}: {exc}")
         latency_ms = round((time.perf_counter() - started) * 1000, 1)
         usage = getattr(response, "usage", None)
         input_tokens = int(getattr(usage, "input_tokens", 0) or 0)

@@ -224,8 +224,17 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
             with telemetry.span(
                 "release.signoff", sample_id=sample_id, decision=body.decision, allowed=verdict["ok"],
                 rule=verdict["rule"] or "none", exceptions=",".join(evaluation["exceptions"]) or "none", role=x_role,
-            ):
-                pass
+            ) as rsp:
+                rows = evaluation["comparison"]["rows"]
+                telemetry.record_io(
+                    rsp,
+                    input=f"Sample {sample_id}, decision requested: {body.decision}, role: {x_role}\n"
+                    f"Scientist's note: {release.clean_note(body.note) or '(none)'}\n"
+                    "Targets vs measured:\n" + "\n".join(f"- {r['key']}: {r['value']} ({'met' if r['passed'] else 'missed'}; {r['basis']})" for r in rows)
+                    + f"\nExceptions: {', '.join(evaluation['exceptions']) or 'none'}",
+                    output=f"{'Recorded' if verdict['ok'] else 'Refused'}: {body.decision}"
+                    + (f" (rule {verdict['rule']})" if verdict["rule"] else "") + f"\n{verdict['detail']}",
+                )
             if not verdict["ok"]:
                 raise HTTPException(409, {"rule": verdict["rule"], "detail": verdict["detail"]})
             receipt = release.make_receipt(sample, targets, evaluation, body.decision, body.note, x_role)

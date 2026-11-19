@@ -12,3 +12,4 @@ arize-phoenix>=8
 arize-phoenix-otel>=0.9
 openinference-instrumentation-langchain>=0.1
 opentelemetry-sdk>=1.25
+openinference-instrumentation-anthropic>=0.1

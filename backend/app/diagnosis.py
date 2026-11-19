@@ -74,6 +74,20 @@ def _parse(text: str) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def summarize_answer(response) -> dict:
+    """Span attributes that show the diagnosis agent's proposal in plain text."""
+    text = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")
+    p = _parse(text)
+    if p is None:
+        return {"diagnosis.parsed": False, "diagnosis.proposed_action": "none (unparseable answer; the gate will hold it)"}
+    return {
+        "diagnosis.parsed": True,
+        "diagnosis.proposed_action": str(p.get("action")),
+        "diagnosis.cause": str(p.get("cause")),
+        "diagnosis.reason": str(p.get("reason")),
+    }
+
+
 def propose(record: dict, references: list[dict]) -> dict:
     """Returns {proposal, mode, note, usage}. The proposal is NOT yet checked: pass it to action_gate.gate."""
     key = anthropic_key()
@@ -90,6 +104,7 @@ def propose(record: dict, references: list[dict]) -> dict:
             prompt_version=PROMPT_VERSION,
             model=model,
             max_tokens=400,
+            summarize=summarize_answer,
             system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": json.dumps(build_lineage(record, references))}],
         )

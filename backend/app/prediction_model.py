@@ -28,5 +28,11 @@ def predict(composition: str) -> float | None:
 
 def score(rows: list[dict]) -> list[dict]:
     """Return copies of the rows with expected_improvement and the backend name filled in."""
-    with telemetry.span("prediction.score", candidates=len(rows), backend=BACKEND):
-        return [dict(r, expected_improvement=predict(r["composition"]), prediction_backend=BACKEND) for r in rows]
+    with telemetry.span("prediction.score", candidates=len(rows), backend=BACKEND) as sp:
+        scored = [dict(r, expected_improvement=predict(r["composition"]), prediction_backend=BACKEND) for r in rows]
+        telemetry.record_io(
+            sp,
+            input="\n".join(f"- {r['composition']} via {r.get('processing')}" for r in rows) or "no candidates",
+            output="\n".join(f"- {r['composition']}: expected improvement {r['expected_improvement']}" for r in scored) or "no scores",
+        )
+        return scored

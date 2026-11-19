@@ -36,6 +36,14 @@ class CampaignOrchestrator:
             if summary["llm_totals"]["cost_usd"] is not None:
                 sp.set_attribute("llm_cost_usd", summary["llm_totals"]["cost_usd"])
             sp.set_attribute("targets", json.dumps(summary.get("targets") or {}))
+            telemetry.record_io(
+                sp,
+                input=f"Plan the next batch for {campaign_id}. Targets: {json.dumps(targets or {})}",
+                output=f"Status: {summary['status']}; setup_mode: {summary.get('setup_mode')}"
+                + (f" ({summary['setup_error']})" if summary.get("setup_error") else "")
+                + "\nCandidates:\n" + "\n".join(f"- {c['candidate_id']} {c['composition']} via {c['processing']}" for c in summary["candidates"])
+                + "\nSafety gate: " + ", ".join(f"{v['candidate_id']} {'allowed' if v['allowed'] else 'blocked ' + str(v['rule'])}" for v in summary["verdicts"]),
+            )
             sp.set_attribute("blocked_count", sum(1 for v in summary["verdicts"] if not v["allowed"]))
             return summary
 
@@ -50,9 +58,15 @@ class CampaignOrchestrator:
             decision=decision,
             scientist_override=decision != "approve",
             review_note=(note or "").strip() or None,
-        ):
+        ) as rsp:
+            telemetry.record_io(rsp, input=f"Scientist decision: {decision}\nScientist note: {(note or '').strip() or '(none)'}")
             out = self.graph.invoke(Command(resume={"decision": decision, "note": note}), config)
-            return self._summarize(thread_id, config, out)
+            summary = self._summarize(thread_id, config, out)
+            telemetry.record_io(
+                rsp,
+                output="Samples after review:\n" + "\n".join(f"- {t['sample_id']}: {t['status']} ({t.get('decision')})" for t in summary["triage"]),
+            )
+            return summary
 
     def _summarize(self, thread_id: str, config: dict, out: dict) -> dict:
         pending = out.get("__interrupt__") or []

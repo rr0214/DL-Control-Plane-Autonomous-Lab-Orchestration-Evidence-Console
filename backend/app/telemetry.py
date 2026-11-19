@@ -13,6 +13,7 @@ Curated historical examples live in a separate project, `sdl-control-plane-seed`
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import socket
@@ -92,6 +93,33 @@ def init_tracing() -> bool:
     _state["enabled"] = True
     log.info("Phoenix tracing on: project=%s endpoint=%s", live_project(), url)
     return True
+
+
+MAX_TEXT = 6000  # long enough to read a prompt or a result, short enough to keep traces light
+
+
+def readable(value: Any, limit: int = MAX_TEXT) -> str:
+    """Plain text for a span attribute: strings as they are, everything else as indented JSON."""
+    if isinstance(value, str):
+        text = value
+    else:
+        try:
+            text = json.dumps(value, indent=2, default=str, ensure_ascii=False)
+        except (TypeError, ValueError):
+            text = str(value)
+    return text if len(text) <= limit else text[:limit] + f"\n... [{len(text) - limit} more characters cut]"
+
+
+def record_io(sp: trace.Span | None = None, input: Any = None, output: Any = None, **attrs: Any) -> None:
+    """Put a step's actual input and output on its span as readable text (Phoenix shows input.value / output.value)."""
+    sp = sp or trace.get_current_span()
+    if input is not None:
+        sp.set_attribute("input.value", readable(input))
+        sp.set_attribute("input.mime_type", "text/plain")
+    if output is not None:
+        sp.set_attribute("output.value", readable(output))
+        sp.set_attribute("output.mime_type", "text/plain")
+    set_attrs(sp, attrs)
 
 
 def set_attrs(sp: trace.Span, attrs: dict[str, Any]) -> None:

@@ -6,6 +6,7 @@ recorded with its transport (fastmcp or direct) in state.tool_calls.
 from __future__ import annotations
 
 import functools
+import json
 from dataclasses import asdict
 from typing import Any, TypedDict
 
@@ -85,6 +86,17 @@ def setup_agent_node(state: CampaignState) -> dict[str, Any]:
     # Targets passed in with the plan win; otherwise use the campaign's own.
     targets = state.get("targets") or campaign["targets"]
     out = setup_agent.run(campaign["goal"], targets, prior, CAMPAIGN_ELEMENTS, gateway.call)
+    telemetry.record_io(
+        input=f"Goal: {campaign['goal']}\nTargets: {json.dumps(targets or {})}\nPrior runs: {len(prior)}\nReferences retrieved: "
+        + ", ".join(r["id"] for r in out["references"]),
+        output=(
+            f"setup_mode: {out['setup_mode']}" + (f" (reason: {out['setup_error']})" if out["setup_error"] else "")
+            + f"\nSearch space: {setup_agent.describe_space(out['space']) if out['space'] else 'none'}"
+            + "\nDirections:\n"
+            + ("\n".join(f"- {d['direction']} [cites {', '.join(d['cited_ids'])}]" for d in out["directions"]) or "none")
+        ),
+        setup_mode=out["setup_mode"],
+    )
     return {
         "goal": campaign["goal"],
         "targets": targets,
@@ -113,6 +125,14 @@ def optimizer_node(state: CampaignState) -> dict[str, Any]:
         output, transport = gateway.call("propose_alloy_ratios", {"search_space": space, "n": 6})
         calls.append({"tool": "propose_alloy_ratios", "transport": transport, "args": {"search_space": True}})
         space_candidates = proposer.space_rows(output)
+    telemetry.record_io(
+        input="Search space: " + (setup_agent.describe_space(space) if space else "none (no valid space, so only the fixed rows run)"),
+        output="Optimizer ratios inside the space:\n"
+        + ("\n".join(f"- {r['composition']} via {r['processing']}" for r in space_candidates) or "none")
+        + "\nFixed rows (probes and review test case):\n"
+        + "\n".join(f"- {r['composition']} via {r['processing']} [{r.get('origin')}]" for r in fixed),
+        backend="mock-optimizer-v1",
+    )
     return {
         "fixed_candidates": fixed,
         "space_candidates": space_candidates,
@@ -135,8 +155,17 @@ def prediction_model_node(state: CampaignState) -> dict[str, Any]:
         )
     else:
         note = "No search space, so only the boundary probes and the review control run (mock plan)"
+    assembled = proposer.assemble(chosen, fixed)
+    telemetry.record_io(
+        input=f"{len(scored)} optimizer candidate(s) and {len(fixed)} fixed row(s) to score",
+        output="Scores (expected improvement):\n"
+        + "\n".join(f"- {r['composition']} via {r['processing']}: {r.get('expected_improvement')}" for r in [*scored, *fixed])
+        + f"\nPicked to lead the batch: {chosen[0]['composition'] + ' via ' + chosen[0]['processing'] if chosen else 'none'}"
+        + "\nBatch order: " + ", ".join(f"{c['candidate_id']} {c['composition']}" for c in assembled),
+        backend="mock-prediction-v1",
+    )
     return {
-        "candidates": proposer.assemble(chosen, fixed),
+        "candidates": assembled,
         "llm_mode": "anthropic" if chosen else "mock",
         "notes": [*state.get("notes", []), note],
     }
@@ -165,6 +194,14 @@ def policy_kernel_node(state: CampaignState) -> dict[str, Any]:
             verdict = policy_kernel.check(cand, prior)
             psp.set_attribute("policy_status", "Allowed" if verdict.allowed else "Blocked")
             psp.set_attribute("policy_rule", verdict.rule)
+            telemetry.record_io(
+                psp,
+                input=f"Candidate {cand['candidate_id']}: {cand['composition']} via {cand['processing']}\n"
+                f"Earlier runs with the same conditions: {', '.join(p['run_id'] + ' (' + p['outcome'] + ')' for p in prior) or 'none'}",
+                output=f"{'Allowed' if verdict.allowed else 'Blocked'}"
+                + (f" by rule {verdict.rule}" if verdict.rule else "")
+                + f"\nReason: {verdict.reason}",
+            )
         verdicts.append(asdict(verdict))
         if verdict.allowed:
             approved.append(cand)
@@ -258,11 +295,25 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
             measurements = measure.measure(cand["composition"], cand["processing"])
             msp.set_attribute("hardness_hv", measurements["hardness_hv"])
             msp.set_attribute("oxidation_mg_cm2", measurements["oxidation_mg_cm2"])
+            telemetry.record_io(
+                msp,
+                input=f"Make and measure {cand['composition']} via {cand['processing']} (simulated)",
+                output=f"Hardness {measurements['hardness_hv']:.0f} HV; oxidation {measurements['oxidation_mg_cm2']:.2f} mg/cm2; "
+                f"measured composition (at%): {json.dumps(measurements.get('composition_at_pct'))}",
+            )
         with telemetry.span("measurement.check", campaign_id=state.get("campaign_id"), candidate_id=cand["candidate_id"]) as csp:
             result = check.run_checks(cand["composition"], measurements, state.get("references", []), record["sample_id"])
             csp.set_attribute("flags", ",".join(result["flags"]) or "none")
             csp.set_attribute("severity", result["severity"] or "none")
             csp.set_attribute("similar_count", len(result["similar"]))
+            telemetry.record_io(
+                csp,
+                input=f"Recipe {cand['composition']} via {cand['processing']}\nMeasured: hardness {measurements['hardness_hv']:.0f} HV, "
+                f"oxidation {measurements['oxidation_mg_cm2']:.2f} mg/cm2, composition (at%) {json.dumps(measurements.get('composition_at_pct'))}",
+                output=f"Severity: {result['severity'] or 'none'}; flags: {', '.join(result['flags']) or 'none'}\n"
+                + "\n".join(f"- {'pass' if i['passed'] else 'FAIL'} {i['rule']}: {i.get('detail') or i.get('reason') or ''}" for i in result["checks"])
+                + f"\nSimilar runs compared: {', '.join(result['similar']) or 'none'}",
+            )
         # The check can only make a sample's status worse, never better.
         rank = {"Green": 0, "Yellow": 1, "Red": 2}
         if result["severity"] and rank[result["severity"]] > rank[status]:
@@ -305,6 +356,14 @@ def diagnose_flagged(state: CampaignState) -> dict[str, Any]:
                 gsp.set_attribute("allowed", verdict["allowed"])
                 gsp.set_attribute("final_action", verdict["final_action"])
                 gsp.set_attribute("rule", verdict["rule"] or "none")
+                p = result["proposal"] if isinstance(result["proposal"], dict) else {}
+                telemetry.record_io(
+                    gsp,
+                    input=f"Sample {rec['sample_id']} ({rec.get('status')}); earlier re-measures: {prior}\n"
+                    f"Proposal: action={p.get('action')}, cause={p.get('cause')}, reason={p.get('reason')}",
+                    output=f"{'Allowed' if verdict['allowed'] else 'Overridden'}: final action {verdict['final_action']}"
+                    + (f" (rule {verdict['rule']})" if verdict["rule"] else "") + f"\n{verdict['detail']}",
+                )
             rec["diagnosis"] = {"mode": result["mode"], "gate": verdict, "executed": False}
             line = f"Diagnosis ({'Claude' if result['mode'] == 'anthropic' else 'mock'}): {verdict['final_action']}"
             if verdict["proposal"].get("cause") in action_gate.CAUSES:
