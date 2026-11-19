@@ -143,6 +143,8 @@ def run(goal: str, targets: dict | None, history: list[dict], elements: list[str
         "directions": [],
         "space": None,
         "mode": "mock",
+        "setup_mode": "mock",
+        "setup_error": None,
         "usage": [],
         "tool_calls": [{"tool": "search_calphad_literature", "transport": transport, "args": {"elements": elements}}],
     }
@@ -154,51 +156,66 @@ def run(goal: str, targets: dict | None, history: list[dict], elements: list[str
         return out
     model = agent_model("setup")
     prior = "\n".join(history_mod.format_line(r) for r in history)
+    out["setup_mode"] = "mock_fallback"  # stays this unless a validated answer comes back
+    errors: list[str] = []
     try:
         import anthropic
 
         client = anthropic.Anthropic(api_key=key)
-        response, record = llm_usage.call(
-            client,
-            agent="setup",
-            prompt_version=PROMPT_VERSION,
-            model=model,
-            max_tokens=MAX_TOKENS,
-            # The system prompt, the tool and the reference list repeat across batches, so they are marked cacheable.
-            system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-            tools=[SETUP_TOOL],
-            tool_choice={"type": "tool", "name": SETUP_TOOL["name"]},
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": f"References:\n{_refs_text(refs)}", "cache_control": {"type": "ephemeral"}},
-                        {
-                            "type": "text",
-                            "text": f"Campaign goal: {goal}\n{describe_targets(targets)}\nPrior runs:\n{prior}\n\nSet up the next batch now.",
-                        },
-                    ],
-                }
-            ],
-        )
-        out["usage"].append(record)
-        use = next((b for b in response.content if getattr(b, "type", "") == "tool_use" and b.name == SETUP_TOOL["name"]), None)
-        if use is None:
-            out["note"] = f"Claude ({model}) made no usable setup answer; used mock plan"
+    except Exception as exc:  # SDK missing or broken
+        errors.append(f"{type(exc).__name__}: {str(exc)[:200]}")
+        client = None
+    for attempt in (1, 2):  # one try plus one retry
+        if client is None:
+            break
+        try:
+            response, record = llm_usage.call(
+                client,
+                agent="setup",
+                prompt_version=PROMPT_VERSION,
+                model=model,
+                max_tokens=MAX_TOKENS,
+                # The system prompt, the tool and the reference list repeat across batches, so they are marked cacheable.
+                system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+                tools=[SETUP_TOOL],
+                # Some models reject a forced tool choice, so ask in the prompt and let code check the answer.
+                tool_choice={"type": "auto"},
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": f"References:\n{_refs_text(refs)}", "cache_control": {"type": "ephemeral"}},
+                            {
+                                "type": "text",
+                                "text": f"Campaign goal: {goal}\n{describe_targets(targets)}\nPrior runs:\n{prior}\n\n"
+                                f"Set up the next batch now. Answer only by calling the {SETUP_TOOL['name']} tool.",
+                            },
+                        ],
+                    }
+                ],
+            )
+            out["usage"].append(record)
+            use = next((b for b in response.content if getattr(b, "type", "") == "tool_use" and b.name == SETUP_TOOL["name"]), None)
+            if use is None:
+                errors.append(f"attempt {attempt}: no tool call in the response")
+                continue
+            raw = dict(use.input)
+            space = clean_space(raw)
+            if space is None:
+                errors.append(f"attempt {attempt}: search space did not validate")
+                continue
+            out["directions"] = keep_cited(raw.get("directions"), refs)
+            out["space"] = space
+            out["mode"] = "anthropic"
+            out["setup_mode"] = "anthropic"
+            out["note"] = (
+                f"Claude ({model}) read {len(refs)} references and {len(history)} prior runs, set a search space "
+                f"({describe_space(space)}), and suggested {len(out['directions'])} direction(s); citations limited to retrieved references"
+                + (f" (needed a retry: {errors[0]})" if errors else "")
+            )
             return out
-        raw = dict(use.input)
-        out["directions"] = keep_cited(raw.get("directions"), refs)
-        out["space"] = clean_space(raw)
-        out["mode"] = "anthropic"
-        space_note = (
-            f"set a search space ({describe_space(out['space'])})"
-            if out["space"]
-            else "returned no usable search space, so only the fixed controls run"
-        )
-        out["note"] = (
-            f"Claude ({model}) read {len(refs)} references and {len(history)} prior runs, {space_note}, and suggested "
-            f"{len(out['directions'])} direction(s); citations limited to retrieved references"
-        )
-    except Exception as exc:  # network, auth, or SDK errors fall back to the mock
-        out["note"] = f"Setup agent call failed ({type(exc).__name__}); used mock plan"
+        except Exception as exc:  # network, auth, or API errors
+            errors.append(f"attempt {attempt}: {type(exc).__name__}: {str(exc)[:300]}")
+    out["setup_error"] = "; ".join(errors)
+    out["note"] = f"SETUP FELL BACK TO MOCK. {out['setup_error']}"
     return out

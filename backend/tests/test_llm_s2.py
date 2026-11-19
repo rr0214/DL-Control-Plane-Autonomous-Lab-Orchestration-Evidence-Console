@@ -67,7 +67,7 @@ def test_setup_call_returns_a_clean_search_space_and_one_usage_record(monkeypatc
     assert {e["symbol"] for e in out["space"]["elements"]} == {"Nb", "Ti", "Cr", "Al"}
     assert "set a search space" in out["note"] and len(fake.calls) == 1  # one call, no tool loop
     call = fake.calls[0]
-    assert call["tool_choice"] == {"type": "tool", "name": "submit_setup"}
+    assert call["tool_choice"] == {"type": "auto"}
     assert call["system"][0]["cache_control"] == {"type": "ephemeral"}  # repeated parts are marked cacheable
 
 
@@ -121,19 +121,52 @@ def test_setup_without_key_is_a_labeled_plain_lookup(monkeypatch):
     assert "plain lookup" in out["note"]
 
 
-def test_setup_survives_a_missing_answer_and_a_failed_call(monkeypatch):
-    install(monkeypatch, FakeClient([([block_text("not a tool call")], 10, 5)]))
+def test_setup_uses_auto_tool_choice_not_a_forced_one(monkeypatch):
+    fake = FakeClient([([block_setup()], 100, 10)])
+    install(monkeypatch, fake)
+    setup_agent.run("g", None, HISTORY, ["Nb", "Ti"], direct_call)
+    assert fake.calls[0]["tool_choice"] == {"type": "auto"}
+    assert "submit_setup" in fake.calls[0]["messages"][0]["content"][1]["text"]
+
+
+def test_no_tool_call_twice_falls_back_loudly_after_one_retry(monkeypatch):
+    fake = FakeClient([([block_text("not a tool call")], 10, 5), ([block_text("still no tool call")], 10, 5)])
+    install(monkeypatch, fake)
     out = setup_agent.run("g", None, HISTORY, ["Nb"], direct_call)
-    assert out["mode"] == "mock" and out["space"] is None and out["directions"] == [] and len(out["usage"]) == 1  # the call was paid for
+    assert len(fake.calls) == 2  # one try, one retry, no more
+    assert out["mode"] == "mock" and out["setup_mode"] == "mock_fallback"
+    assert out["space"] is None and out["directions"] == [] and len(out["usage"]) == 2  # both calls were paid for
+    assert "no tool call" in out["setup_error"] and "FELL BACK" in out["note"]
+
+
+def test_retry_recovers_when_the_second_answer_is_good(monkeypatch):
+    fake = FakeClient([([block_text("oops")], 10, 5), ([block_setup()], 100, 10)])
+    install(monkeypatch, fake)
+    out = setup_agent.run("g", None, HISTORY, ["Nb", "Ti", "Cr", "Al"], direct_call)
+    assert out["setup_mode"] == "anthropic" and out["space"] and out["setup_error"] is None
+    assert "retry" in out["note"]
+
+
+def test_a_search_space_that_does_not_validate_is_retried_then_falls_back(monkeypatch):
+    bad = SimpleNamespace(type="tool_use", id="t", name="submit_setup", input={"elements": [], "routes": [], "directions": []})
+    install(monkeypatch, FakeClient([([bad], 10, 5), ([bad], 10, 5)]))
+    out = setup_agent.run("g", None, HISTORY, ["Nb"], direct_call)
+    assert out["setup_mode"] == "mock_fallback" and "did not validate" in out["setup_error"]
+
+
+def test_a_failed_api_call_is_retried_once_and_the_reason_is_kept(monkeypatch):
+    calls = []
 
     def boom(**k):
-        raise RuntimeError("down")
+        calls.append(1)
+        raise RuntimeError("tool_choice type tool and any are not supported for this model")
 
     broken = FakeClient([])
     broken.messages = SimpleNamespace(create=boom)
     install(monkeypatch, broken)
     out = setup_agent.run("g", None, HISTORY, ["Nb"], direct_call)
-    assert out["mode"] == "mock" and "failed" in out["note"] and out["references"]
+    assert len(calls) == 2
+    assert out["setup_mode"] == "mock_fallback" and "not supported for this model" in out["setup_error"] and out["references"]
 
 
 def test_optimizer_table_has_no_hafnium_outside_the_probe_and_ratios_sum_to_100():

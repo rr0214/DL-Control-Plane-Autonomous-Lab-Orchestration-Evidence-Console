@@ -83,7 +83,9 @@ def flatten(case: dict, plan: dict | None, review: dict | None, release: dict | 
     if error:
         return f"ERROR: {error}"
     last = review or plan or {}
-    parts = [f"status={last.get('status')}", f"setup={'Claude' if (plan or {}).get('literature_mode') == 'anthropic' else 'mock'}"]
+    parts = [f"status={last.get('status')}", f"setup_mode={(plan or {}).get('setup_mode') or 'mock'}"]
+    if (plan or {}).get("setup_mode") == "mock_fallback":
+        parts.append(f"setup_error={(plan or {}).get('setup_error')}")
     cands = (plan or {}).get("candidates", [])
     blocked = sorted({v["rule"] for v in (plan or {}).get("verdicts", []) if not v["allowed"]})
     parts.append(f"candidates={len(cands)} blocked={','.join(blocked) or 'none'}")
@@ -175,6 +177,8 @@ def run_case(client, case: dict, workdir: Path, tracer_span) -> dict:
         "trace_id": trace_id,
         "final_output": flatten(case, plan, review, release, totals, error),
         "error": error,
+        "setup_mode": (plan or {}).get("setup_mode"),
+        "setup_error": (plan or {}).get("setup_error"),
         "llm_totals": totals or {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cache_write_tokens": 0, "cache_read_tokens": 0, "cost_usd": None},
         "seconds": round(time.perf_counter() - started, 2),
     }
@@ -203,6 +207,10 @@ def summarize(results: list[dict], skipped: list[str], max_usd: float, stopped: 
         f"tokens: {tot['in']} input, {tot['out']} output",
         f"cache hits: {tot['cr']} tokens read from cache, {tot['cw']} written; cache hit rate {rate}",
     ]
+    fallbacks = [r for r in results if r.get("setup_mode") == "mock_fallback"]
+    lines.append(f"setup agent fallbacks to mock: {len(fallbacks)} of {sum(1 for r in results if r.get('mode') == 'real')} real case(s)")
+    if fallbacks:
+        lines.append(f"WARNING: setup fell back to mock in {', '.join(r['case_id'] for r in fallbacks)}; first reason: {fallbacks[0].get('setup_error')}")
     if unpriced:
         lines.append(f"WARNING: {unpriced} case(s) used a model with no price, so their cost is not in the total")
     if stopped:

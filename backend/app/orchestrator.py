@@ -71,6 +71,8 @@ class CampaignOrchestrator:
             "literature": values.get("literature", []),
             "directions": values.get("directions", []),
             "literature_mode": values.get("literature_mode"),
+            "setup_mode": values.get("setup_mode"),
+            "setup_error": values.get("setup_error"),
             "search_space": values.get("search_space"),
             "llm_usage": values.get("llm_usage", []),
             "llm_totals": llm_usage.totals(values.get("llm_usage", [])),

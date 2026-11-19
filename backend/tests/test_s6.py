@@ -140,7 +140,7 @@ def test_real_case_records_the_setup_pick_and_cost(tmp_path, monkeypatch):
     monkeypatch.setattr(anthropic, "Anthropic", lambda **k: FakeClient(cost_in=1000))
     run(tmp_path, monkeypatch, "--only", "S6-001")
     r = json.loads((tmp_path / "results.json").read_text())["results"][0]
-    assert "setup=Claude" in r["final_output"] and "pick=Nb45-Ti25-Cr20-Al10" in r["final_output"]
+    assert "setup_mode=anthropic" in r["final_output"] and "pick=Nb45-Ti25-Cr20-Al10" in r["final_output"]
     assert r["llm_totals"]["calls"] >= 1 and r["llm_totals"]["cost_usd"] > 0
 
 

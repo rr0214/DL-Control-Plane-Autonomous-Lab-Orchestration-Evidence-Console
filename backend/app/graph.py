@@ -30,6 +30,8 @@ class CampaignState(TypedDict, total=False):
     literature: list[dict[str, Any]]
     directions: list[dict[str, Any]]
     literature_mode: str
+    setup_mode: str
+    setup_error: str | None
     search_space: dict[str, Any] | None
     fixed_candidates: list[dict[str, Any]]
     space_candidates: list[dict[str, Any]]
@@ -92,6 +94,8 @@ def setup_agent_node(state: CampaignState) -> dict[str, Any]:
         "literature": out["references"],
         "directions": out["directions"],
         "literature_mode": out["mode"],
+        "setup_mode": out["setup_mode"],
+        "setup_error": out["setup_error"],
         "search_space": out["space"],
         "llm_usage": [*state.get("llm_usage", []), *out["usage"]],
         "tool_calls": [*state.get("tool_calls", []), *out["tool_calls"]],
