@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import ArchitectureTab from "@/components/ArchitectureTab";
 import ConsoleTab from "@/components/ConsoleTab";
-import EvalsTab from "@/components/EvalsTab";
+// Evals tab hidden for now. To bring it back, uncomment this import, its TABS entry and its render line below.
+// import EvalsTab from "@/components/EvalsTab";
 import { API, CampaignView } from "@/lib/api";
 
 const TABS = [
   { id: "console", label: "Lab Control Console" },
   { id: "architecture", label: "System Architecture" },
-  { id: "evals", label: "Evals (Error Analysis)" },
+  // { id: "evals", label: "Evals (Error Analysis)" },  // hidden for now
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -99,7 +100,7 @@ export default function Home() {
 
       {tab === "console" && <ConsoleTab key={resetKey} campaign={campaign} onChange={loadCampaign} />}
       {tab === "architecture" && <ArchitectureTab />}
-      {tab === "evals" && <EvalsTab />}
+      {/* {tab === "evals" && <EvalsTab />}  hidden for now */}
     </main>
   );
 }
