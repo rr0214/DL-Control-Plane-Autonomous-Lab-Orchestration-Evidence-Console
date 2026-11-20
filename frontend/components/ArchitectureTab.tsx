@@ -37,6 +37,54 @@ function StatusTag({ status }: { status: Status }) {
   );
 }
 
+// The 12 steps of one run, worded exactly like the flow diagram in README.md. Keep the two in sync.
+const FLOW: { n: string; name: string; tech: string; tag: string; type: LoopStep["type"]; simulated: boolean }[] = [
+  { n: "1", name: "Targets", tech: "Next.js form", tag: "REAL", type: "person", simulated: false },
+  { n: "2", name: "Target check", tech: "Python rules", tag: "REAL", type: "code", simulated: false },
+  { n: "3", name: "Setup agent", tech: "Claude, one answer tool", tag: "REAL", type: "LLM", simulated: false },
+  { n: "4", name: "Optimizer", tech: "fixed table via an MCP tool", tag: "SIMULATED", type: "ML", simulated: true },
+  { n: "5", name: "Prediction", tech: "Python lookup with no trained model", tag: "SIMULATED", type: "ML", simulated: true },
+  { n: "6", name: "Safety gate", tech: "Python policy kernel", tag: "REAL", type: "code", simulated: false },
+  { n: "7", name: "Scientist review", tech: "LangGraph pause where a person decides", tag: "REAL", type: "person", simulated: false },
+  { n: "8", name: "Make and test", tech: "Python simulator", tag: "SIMULATED", type: "code", simulated: true },
+  { n: "9", name: "Measure check", tech: "Python rules on simulated data", tag: "REAL code", type: "code", simulated: false },
+  { n: "10", name: "Diagnosis agent", tech: "Claude with a JSON reply", tag: "REAL", type: "LLM", simulated: false },
+  { n: "11", name: "Action gate", tech: "Python that fails closed to hold", tag: "REAL", type: "code", simulated: false },
+  { n: "12", name: "Release", tech: "FastAPI plus a receipt where a person signs off", tag: "REAL", type: "person", simulated: false },
+  { n: "", name: "Save and learn", tech: "SQLite history with no retraining", tag: "REAL", type: "code", simulated: false },
+];
+
+function FlowDiagram() {
+  return (
+    <ol className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      {FLOW.map((s, i) => (
+        <li
+          key={s.name}
+          className={`relative rounded-lg border-2 p-3 ${TYPE_TONE[s.type]} ${
+            s.simulated ? "border-dashed border-slate-500" : "border-solid border-transparent"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-sm font-semibold">
+              {s.n && <span className="mr-1 font-mono text-xs opacity-70">{s.n}</span>}
+              {s.name}
+            </span>
+            <span className="whitespace-nowrap rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+              {s.tag}
+            </span>
+          </div>
+          <p className="mt-1 text-xs">{s.tech}</p>
+          {i < FLOW.length - 1 && (
+            <span aria-hidden className="absolute -right-2 top-1/2 hidden -translate-y-1/2 text-slate-400 lg:block">
+              ›
+            </span>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function Collapsible({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <details className="group rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -80,6 +128,18 @@ export default function ArchitectureTab() {
           The AI proposes, plain code decides, and a human approves anything irreversible. Every step is recorded.
         </p>
 
+        <FlowDiagram />
+
+        <p className="mt-3 text-xs text-slate-500">
+          Colors: green is a person, purple is an AI agent, yellow is math, gray is code. Dashed means simulated, not real. In step 3, code runs the literature lookup first, then Claude reads it and gives one answer.
+        </p>
+        <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700 ring-1 ring-slate-200">
+          Under every step: LangGraph, SQLite checkpoints, FastAPI, Next.js, MCP tool gateway, Arize Phoenix traces through
+          OpenTelemetry, and code evals.
+        </p>
+      </div>
+
+      <Collapsible title="Step details, read from the backend">
         {/* Wide screens: a table. */}
         <div className="mt-4 hidden overflow-hidden rounded-lg ring-1 ring-slate-200 md:block">
           <table className="w-full text-left text-sm">
@@ -133,7 +193,7 @@ export default function ArchitectureTab() {
           LLM is a language model, ML is a numeric model, code is plain deterministic code, person is a human decision. Mock means a stand-in with demo values. Simulated means the readings are generated, not measured. The gate, the
           review pause, the receipts and the tracing are real.
         </p>
-      </div>
+      </Collapsible>
 
       <Collapsible title="What is MCP?">
         <p>
@@ -168,11 +228,13 @@ export default function ArchitectureTab() {
             <tbody className="divide-y divide-slate-200">
               {[
                 ["LLM input", "Goal and run history", "Plus literature, lab schedule and past scientist notes"],
-                ["LLM tools", "None: code retrieves, one forced answer", "Several: literature search, failure lookup, optimizer"],
                 ["LLM output", "Search space and cited directions", "Plus a rationale a scientist can read"],
                 ["Risk model", "Hard-coded lookup", "A trained model"],
-                ["Setup agent mode", "Mock, no LLM call", "The LLM runs every batch"],
-                ["Workcell", "Simulated readings", "Robots, SEM and XRD instruments"],
+                ["Setup agent", "Real Claude call, one answer tool", "Real Claude call"],
+                ["Diagnosis agent", "Real Claude call with a JSON reply", "Real Claude call"],
+                ["Optimizer", "Simulated: a fixed table", "A real optimizer"],
+                ["Prediction model", "Simulated: a lookup with no trained model", "A trained model"],
+                ["Lab", "Simulated readings", "Robots, SEM and XRD instruments"],
               ].map(([k, a, b]) => (
                 <tr key={k}>
                   <td className="py-2 pr-3 font-medium text-slate-900">{k}</td>
