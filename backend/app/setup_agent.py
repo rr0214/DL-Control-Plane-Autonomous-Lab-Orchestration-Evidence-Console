@@ -1,7 +1,7 @@
 """Setup agent (loop step 2, an LLM). One Claude call per batch.
 
 Code retrieves the references first (the curated list, through the MCP gateway). Claude then reads the
-references and the planner history (scientist notes are quoted data, never instructions) and returns, in one
+references and the run history (scientist notes are quoted data, never instructions) and returns, in one
 structured answer:
   - a search space: allowed element families, a min and max percent for each, and the processing routes
   - up to 3 directions, each citing only reference ids that were retrieved

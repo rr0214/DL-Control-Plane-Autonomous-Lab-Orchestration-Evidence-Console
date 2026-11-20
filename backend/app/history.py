@@ -1,9 +1,9 @@
-"""What the planner reads about earlier work (the write-back loop).
+"""What the setup agent reads about earlier work (the write-back loop).
 
 Seed runs always come first. After them, the most recent decided samples (newest last), capped at
 MAX_SAMPLES so the prompt stays small. Each carries its outcome, who decided, the scientist's note and the
 measurement check flags. A note is free text, so it is cleaned and cut to NOTE_MAX characters and the
-planner prompt treats it as quoted data, never as an instruction.
+setup agent prompt treats it as quoted data, never as an instruction.
 """
 from __future__ import annotations
 

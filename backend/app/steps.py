@@ -20,7 +20,7 @@ LOOP: list[dict] = [
         "n": 1,
         "step": "Customer targets in",
         "what": "The customer sets target properties: high temperature performance, strength, reduced hafnium.",
-        "tooling": "Targets stored on the campaign and passed to the planner. Default values are illustrative.",
+        "tooling": "Targets stored on the campaign and passed to the setup agent. Default values are illustrative.",
         "type": "person",
         "mock": False,
         "status": "Built",
@@ -28,7 +28,7 @@ LOOP: list[dict] = [
     {
         "n": 2,
         "step": "Setup agent",
-        "what": "One Claude call reads the references and the planner history and sets the search space (allowed elements, a range for each, processing routes) plus directions that cite only retrieved references. It never writes ratios.",
+        "what": "One Claude call reads the references and the run history and sets the search space (allowed elements, a range for each, processing routes) plus directions that cite only retrieved references. It never writes ratios.",
         "tooling": "Code retrieves references (MCP tool search_calphad_literature); one forced tool call returns the search space and directions; code clamps the ranges and drops uncited directions. No API key: plain lookup, no search space, labeled mock.",
         "type": "LLM",
         "mock": False,

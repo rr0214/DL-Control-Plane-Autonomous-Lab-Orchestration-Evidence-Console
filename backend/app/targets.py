@@ -17,7 +17,7 @@ DEFAULT_TARGETS: dict = CustomerTargets().model_dump()
 
 
 def describe(targets: dict | None) -> str:
-    """One line for the planner prompt."""
+    """One line for the setup agent prompt."""
     if not targets:
         return ""
     return (
