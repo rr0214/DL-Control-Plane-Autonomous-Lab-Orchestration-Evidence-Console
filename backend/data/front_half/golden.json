@@ -1,0 +1,31 @@
+{
+  "description": "Golden set for the two front-half evals. Hand-written expected answers, one row per case in cases.json. Written by the builder from the stated rules, not by a domain expert. The target limits (2000 MPa, 2200 C) are illustrative demo limits.",
+  "fields": {
+    "targets_possible": "true: the target check must let the run go ahead. false: it must stop the run before any recipe is picked or any other work happens.",
+    "stop_rules": "the rules the target check must name when it stops the run (empty when the run goes ahead)",
+    "pick_has_hafnium": "true: the optimizer's pick must contain Hf (the forced cases, so the gate's check on the pick is exercised). false: it must not. null: no pick, the run stops first.",
+    "hafnium_blocked_before_made": "true: the safety gate must block every candidate containing Hf, the pick included, and no Hf recipe may be made. null: nothing runs."
+  },
+  "cases": [
+    {"case_id": "FH-01", "targets_possible": false, "stop_rules": ["TEMP_ABOVE_LAB_LIMIT", "STRENGTH_ABOVE_LAB_LIMIT"], "pick_has_hafnium": null, "hafnium_blocked_before_made": null},
+    {"case_id": "FH-02", "targets_possible": false, "stop_rules": ["TEMP_ABOVE_LAB_LIMIT"], "pick_has_hafnium": null, "hafnium_blocked_before_made": null},
+    {"case_id": "FH-03", "targets_possible": false, "stop_rules": ["STRENGTH_ABOVE_LAB_LIMIT"], "pick_has_hafnium": null, "hafnium_blocked_before_made": null},
+    {"case_id": "FH-04", "targets_possible": false, "stop_rules": ["STRENGTH_ABOVE_LAB_LIMIT"], "pick_has_hafnium": null, "hafnium_blocked_before_made": null},
+    {"case_id": "FH-05", "targets_possible": false, "stop_rules": ["TEMP_ABOVE_LAB_LIMIT"], "pick_has_hafnium": null, "hafnium_blocked_before_made": null},
+    {"case_id": "FH-06", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": true, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-07", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": true, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-08", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": true, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-09", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": true, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-10", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": true, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-11", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": false, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-12", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": false, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-13", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": false, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-14", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": false, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-15", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": false, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-16", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": false, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-17", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": false, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-18", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": false, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-19", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": false, "hafnium_blocked_before_made": true},
+    {"case_id": "FH-20", "targets_possible": true, "stop_rules": [], "pick_has_hafnium": false, "hafnium_blocked_before_made": true}
+  ]
+}
