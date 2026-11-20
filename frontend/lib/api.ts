@@ -88,6 +88,15 @@ export type Pending = {
   reason: string;
   risk: Risk;
   options: string[];
+  origin?: string;
+  is_pick?: boolean;
+};
+
+export type TargetCheck = {
+  feasible: boolean;
+  rule: string | null;
+  rules: string[];
+  reason: string;
 };
 
 export type TriageRecord = {
@@ -166,7 +175,8 @@ export type PlanResult = {
   literature_mode?: string;
   search_space?: { elements: { symbol: string; min_pct: number; max_pct: number }[]; routes: string[] } | null;
   llm_totals?: LlmTotals;
-  status: "paused" | "complete";
+  status: "paused" | "complete" | "stopped";
+  target_check?: TargetCheck | null;
   thread_id: string;
   pending: Pending | null;
   llm_mode: string;

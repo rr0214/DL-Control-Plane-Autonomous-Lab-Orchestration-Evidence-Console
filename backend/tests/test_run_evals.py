@@ -62,7 +62,8 @@ def test_summary_matches_the_experiment_scoring_and_is_labeled_illustrative():
     s = ev.summary()
     by_t = {r["threshold"]: r for r in s["runs"]}
     assert (by_t[0.8]["passed"], by_t[0.8]["total"]) == (6, 7)
-    assert (by_t[0.95]["passed"], by_t[0.95]["total"]) == (4, 7)
+    # 5, not 4: the composition rule scores the Run-071 recipe at 1.0, so it no longer trips the stricter threshold
+    assert (by_t[0.95]["passed"], by_t[0.95]["total"]) == (5, 7)
     assert "illustrative" in s["labels"] and "none" not in s["failure_modes"] and len(s["failure_modes"]) == 4
 
 

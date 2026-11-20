@@ -20,6 +20,8 @@ class PlanRequest(BaseModel):
     campaign_id: str = "CAMP-014"
     thread_id: str | None = None
     targets: CustomerTargets | None = None  # customer target properties; the campaign's own are used when omitted
+    # Test cases only: skip the setup agent and use this search space. The safety gate still checks every candidate.
+    forced_search_space: dict | None = None
 
 
 class ReleaseRequest(BaseModel):
@@ -153,7 +155,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
         try:
             if conn.execute("SELECT 1 FROM plans WHERE thread_id = ?", (thread_id,)).fetchone():
                 raise HTTPException(409, f"Thread {thread_id} already exists")
-            out = orch().plan(body.campaign_id, thread_id, body.targets.model_dump() if body.targets else None)
+            out = orch().plan(body.campaign_id, thread_id, body.targets.model_dump() if body.targets else None, body.forced_search_space)
             _persist(conn, thread_id, body.campaign_id, out)
         finally:
             conn.close()
@@ -178,10 +180,19 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
             if role is None or needed not in role["permissions"]:
                 raise HTTPException(403, f"Role '{x_role}' may not '{body.decision}' samples")
 
+            # A run can pause more than once (a risky pick, then the review test case). The decision must be for the
+            # sample the thread is waiting on now, or it would be applied to a different recipe.
+            waiting = orch().pending(sample["thread_id"])
+            if waiting is None or waiting.get("sample_id") != sample_id:
+                raise HTTPException(409, f"{sample_id} is not the sample waiting for review" + (f" (waiting: {waiting['sample_id']})" if waiting else ""))
             try:
                 out = orch().review(sample["thread_id"], body.decision, body.note)
             except (ValueError, RuntimeError) as exc:
                 raise HTTPException(409, f"Could not resume thread: {exc}") from exc
+            if out["status"] == "paused":  # paused again on the next review: record this decision now
+                held = body.decision != "approve"
+                db.save_sample(conn, sample["thread_id"], sample["campaign_id"], dict(
+                    waiting, decision=body.decision, intuition_note=body.note, status="Held" if held else "Yellow", telemetry=None))
             _persist(conn, sample["thread_id"], sample["campaign_id"], out)
         finally:
             conn.close()

@@ -20,7 +20,8 @@ LOOP: list[dict] = [
         "n": 1,
         "step": "Customer targets in",
         "what": "The customer sets target properties: high temperature performance, strength, reduced hafnium.",
-        "tooling": "Targets stored on the campaign and passed to the setup agent. Default values are illustrative.",
+        "tooling": "Targets stored on the campaign and passed to the setup agent. A plain-code target check runs first and "
+        "stops the run on impossible targets (illustrative limits). Default values are illustrative.",
         "type": "person",
         "mock": False,
         "status": "Built",
@@ -65,7 +66,8 @@ LOOP: list[dict] = [
         "n": 6,
         "step": "Scientist reviews risky plans",
         "what": "A scientist approves, revises or rejects a risky recipe before anything is made.",
-        "tooling": "LangGraph interrupt() with SQLite checkpoints, role checks, SHA-256 receipts. Risk signals are a mock lookup.",
+        "tooling": "LangGraph interrupt() with SQLite checkpoints, role checks, SHA-256 receipts. Risk signals are a mock "
+        "composition rule applied to the optimizer's actual pick.",
         "type": "person",
         "mock": False,
         "status": "Built",
@@ -112,6 +114,7 @@ LOOP: list[dict] = [
 # "node." prefix is stripped before lookup so the in-app span inspector names match too.
 _SPAN_LABELS: dict[str, tuple[str, int | None, bool]] = {
     "campaign.plan": ("code", None, False),
+    "target_check": ("code", 1, False),
     "setup_agent": ("LLM", 2, False),  # live span sets is_mock when there was no real LLM call
     "llm.setup": ("LLM", 2, False),
     "optimizer": ("ML", 3, True),

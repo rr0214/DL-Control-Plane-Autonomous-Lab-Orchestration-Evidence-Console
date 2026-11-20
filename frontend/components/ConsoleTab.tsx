@@ -369,11 +369,24 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
         </p>
         {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200">{error}</div>}
 
+        {plan?.status === "stopped" && (
+          <div className="rounded-xl bg-rose-50 p-4 shadow-sm ring-1 ring-rose-300">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-rose-900">Run stopped: impossible targets</h2>
+              <Pill tone="red">{plan.target_check?.rules?.join(", ") || "Stopped"}</Pill>
+            </div>
+            <p className="mt-2 text-sm text-rose-900">{plan.target_check?.reason}</p>
+            <p className="mt-1 text-xs text-rose-800">Nothing was picked or made. Change the targets and plan again.</p>
+          </div>
+        )}
+
         {pending && (
           <div className="rounded-xl bg-amber-50 p-4 shadow-sm ring-1 ring-amber-300">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-amber-900">Needs a scientist: {candidateLabel(pending.candidate_id)} (Pre-Synthesis Review)</h2>
-              <Pill tone="yellow">Yellow</Pill>
+              <Pill tone={pending.is_pick ? "blue" : "yellow"}>
+                {pending.is_pick ? "Optimizer pick" : pending.origin === "yellow_control" ? "Review test case" : "Yellow"}
+              </Pill>
             </div>
             <p className="mt-2 text-sm text-amber-900">{pending.reason}</p>
             <div className="mt-2 font-mono text-xs text-amber-900">

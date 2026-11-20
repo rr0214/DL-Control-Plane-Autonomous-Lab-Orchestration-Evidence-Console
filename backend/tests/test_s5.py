@@ -119,7 +119,8 @@ def test_preview_shows_the_comparison_and_the_exceptions(client):
 
 
 def test_release_uses_the_targets_the_plan_was_run_with(client):
-    sid = made_sample(client, targets=dict(TARGETS, service_temp_c=1000, min_yield_strength_mpa=3000))
+    # 1900 MPa at 1000 C is under the target check ceiling (so the run goes ahead) but above what the sample measures
+    sid = made_sample(client, targets=dict(TARGETS, service_temp_c=1000, min_yield_strength_mpa=1900))
     rows = {r["key"]: r for r in client.get(f"/api/samples/{sid}/release").json()["evaluation"]["comparison"]["rows"]}
     assert rows["service_temp_c"]["requirement"] == "at least 1000 C" and rows["service_temp_c"]["passed"] is None
     assert rows["min_yield_strength_mpa"]["passed"] is False

@@ -46,4 +46,5 @@ def test_elongation_display_is_the_margin_scaled_to_the_baseline_and_does_not_ch
     assert s["predicted_elongation_pct"] == 2.1 and s["baseline_elongation_pct"] == 3.0 and s["min_elongation_pct"] == 2.4
     assert s["predicted_elongation_pct"] < s["min_elongation_pct"]  # same call as margin < 0.80
     ok = presynthesis.risk_signals("Nb40-Ti25-Cr20-Al15", "Arc-Melt")
-    assert ok["predicted_elongation_pct"] == 2.8 and ok["predicted_elongation_pct"] >= ok["min_elongation_pct"]
+    assert ok["predicted_ductility_margin"] == 0.85  # composition rule: Al 5 over and Ti 5 under the Run-071 baseline
+    assert ok["predicted_elongation_pct"] == round(0.85 * 3.0, 1) and ok["predicted_elongation_pct"] >= ok["min_elongation_pct"]

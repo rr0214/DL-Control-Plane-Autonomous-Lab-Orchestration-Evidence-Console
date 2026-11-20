@@ -1,4 +1,5 @@
-"""The CampaignOrchestrator LangGraph: setup agent -> optimizer -> prediction model -> safety gate -> review (HITL) -> diagnosis.
+"""The CampaignOrchestrator LangGraph: target check -> setup agent -> optimizer -> prediction model -> safety gate
+-> review (HITL) -> diagnosis. Impossible customer targets stop the run at the target check, before any other step.
 
 Tool use goes through the MCP gateway (mcp_server.gateway), so every tool call is
 recorded with its transport (fastmcp or direct) in state.tool_calls.
@@ -14,7 +15,7 @@ from langgraph.errors import GraphBubbleUp
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
-from . import action_gate, check, config, db, diagnosis, history, measure, policy_kernel, prediction_model, presynthesis, proposer, setup_agent, telemetry, workcell
+from . import action_gate, check, config, db, diagnosis, history, measure, policy_kernel, prediction_model, presynthesis, proposer, setup_agent, target_check, telemetry, workcell
 from .mcp_server import gateway
 
 CAMPAIGN_ELEMENTS = ["Nb", "Ti", "Cr", "Al"]
@@ -25,6 +26,8 @@ class CampaignState(TypedDict, total=False):
     thread_id: str
     goal: str
     targets: dict[str, Any]
+    target_check: dict[str, Any]
+    forced_search_space: dict[str, Any] | None
     scope: dict[str, Any]
     history: list[dict[str, Any]]
     references: list[dict[str, Any]]
@@ -73,6 +76,34 @@ def traced_node(name: str):
     return deco
 
 
+@traced_node("target_check")
+def target_check_node(state: CampaignState) -> dict[str, Any]:
+    """Loop step 1 check (plain code). Impossible targets stop the run here, before any work happens."""
+    targets = state.get("targets")
+    if not targets:
+        conn = db.connect()
+        try:
+            targets = db.get_campaign(conn, state["campaign_id"])["targets"]
+        finally:
+            conn.close()
+    result = target_check.check(targets)
+    telemetry.record_io(
+        input=f"Customer targets: {json.dumps(targets or {})}",
+        output=("Possible" if result["feasible"] else f"IMPOSSIBLE ({result['rule']}): run stopped before any work") + f"\n{result['reason']}",
+        feasible=result["feasible"],
+        rule=result["rule"] or "none",
+        rules=",".join(result["rules"]) or "none",
+    )
+    out: dict[str, Any] = {"targets": targets, "target_check": result}
+    if not result["feasible"]:
+        out["notes"] = [f"Stopped at the target check ({result['rule']}): {result['reason']}"]
+    return out
+
+
+def after_target_check(state: CampaignState) -> str:
+    return "setup_agent" if state.get("target_check", {}).get("feasible", True) else END
+
+
 @traced_node("setup_agent")
 def setup_agent_node(state: CampaignState) -> dict[str, Any]:
     conn = db.connect()
@@ -85,7 +116,19 @@ def setup_agent_node(state: CampaignState) -> dict[str, Any]:
         conn.close()
     # Targets passed in with the plan win; otherwise use the campaign's own.
     targets = state.get("targets") or campaign["targets"]
-    out = setup_agent.run(campaign["goal"], targets, prior, CAMPAIGN_ELEMENTS, gateway.call)
+    forced = state.get("forced_search_space")
+    if forced:
+        # Test cases only: the setup agent is skipped and this search space is used as given. Nothing downstream is
+        # relaxed: the optimizer, the prediction model and the safety gate run exactly as on the main path.
+        space = setup_agent.clean_space(forced)
+        out = {
+            "references": [], "directions": [], "space": space, "mode": "forced", "setup_mode": "forced_for_test",
+            "setup_error": None if space else "forced search space was unusable", "usage": [], "tool_calls": [],
+            "note": "TEST CASE: setup agent skipped; forced search space "
+            + (setup_agent.describe_space(space) if space else "was unusable, so only the fixed rows run"),
+        }
+    else:
+        out = setup_agent.run(campaign["goal"], targets, prior, CAMPAIGN_ELEMENTS, gateway.call)
     telemetry.record_io(
         input=f"Goal: {campaign['goal']}\nTargets: {json.dumps(targets or {})}\nPrior runs: {len(prior)}\nReferences retrieved: "
         + ", ".join(r["id"] for r in out["references"]),
@@ -189,7 +232,8 @@ def policy_kernel_node(state: CampaignState) -> dict[str, Any]:
             for m in neg["exact_matches"]
         ]
         with telemetry.span(
-            "policy.check", campaign_id=state.get("campaign_id"), candidate_id=cand["candidate_id"]
+            "policy.check", campaign_id=state.get("campaign_id"), candidate_id=cand["candidate_id"],
+            composition=cand["composition"], processing=cand["processing"], origin=cand.get("origin"),
         ) as psp:
             verdict = policy_kernel.check(cand, prior)
             psp.set_attribute("policy_status", "Allowed" if verdict.allowed else "Blocked")
@@ -231,6 +275,10 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
             "presynthesis.review",
             campaign_id=state.get("campaign_id"),
             candidate_id=cand["candidate_id"],
+            composition=cand["composition"],
+            processing=cand["processing"],
+            origin=cand.get("origin"),
+            is_pick=cand.get("origin") == "optimizer",
             predicted_ductility_margin=risk["predicted_ductility_margin"],
             # Everything the scientist sees on the review card, so a trace can reconstruct the decision.
             predicted_elongation_pct=risk.get("predicted_elongation_pct"),
@@ -254,6 +302,9 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
             "decision": None,
             "intuition_note": "",
             "follow_up": None,
+            "origin": cand.get("origin"),
+            "is_pick": cand.get("origin") == "optimizer",
+            "reviewed": review_required,
         }
         if review_required:
             # Pauses the graph BEFORE synthesis. The scan telemetry does not exist yet.
@@ -265,6 +316,8 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
                     "status": "Yellow",
                     "composition": cand["composition"],
                     "processing": cand["processing"],
+                    "origin": cand.get("origin"),
+                    "is_pick": cand.get("origin") == "optimizer",
                     "risk": risk,
                     "decision": None,
                     "reason": presynthesis.review_reason(risk),
@@ -291,7 +344,10 @@ def triage_and_hitl(state: CampaignState) -> dict[str, Any]:
         ):
             pass
         # Loop step 7: make and measure (simulated). Step 8: the measurement check (plain code).
-        with telemetry.span("measure.sample", campaign_id=state.get("campaign_id"), candidate_id=cand["candidate_id"]) as msp:
+        with telemetry.span(
+            "measure.sample", campaign_id=state.get("campaign_id"), candidate_id=cand["candidate_id"],
+            composition=cand["composition"], processing=cand["processing"], origin=cand.get("origin"),
+        ) as msp:
             measurements = measure.measure(cand["composition"], cand["processing"])
             msp.set_attribute("hardness_hv", measurements["hardness_hv"])
             msp.set_attribute("oxidation_mg_cm2", measurements["oxidation_mg_cm2"])
@@ -386,13 +442,15 @@ def diagnose_flagged(state: CampaignState) -> dict[str, Any]:
 
 def build_graph(checkpointer):
     graph = StateGraph(CampaignState)
+    graph.add_node("target_check", target_check_node)
     graph.add_node("setup_agent", setup_agent_node)
     graph.add_node("optimizer", optimizer_node)
     graph.add_node("prediction_model", prediction_model_node)
     graph.add_node("policy_kernel", policy_kernel_node)
     graph.add_node("triage_and_hitl", triage_and_hitl)
     graph.add_node("diagnose_flagged", diagnose_flagged)
-    graph.add_edge(START, "setup_agent")
+    graph.add_edge(START, "target_check")
+    graph.add_conditional_edges("target_check", after_target_check, ["setup_agent", END])
     graph.add_edge("setup_agent", "optimizer")
     graph.add_edge("optimizer", "prediction_model")
     graph.add_edge("prediction_model", "policy_kernel")
