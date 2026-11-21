@@ -82,7 +82,7 @@ export function QueueView<T extends string>({
             onClick={() => onFilter(f.id)}
             aria-pressed={filter === f.id}
             className={`rounded-full px-3 py-1 text-sm font-medium ring-1 transition ${
-              filter === f.id ? "bg-ink-200 text-ink-900 ring-ink-500" : "bg-surface text-ink-700 ring-ink-300 hover:bg-ink-50"
+              filter === f.id ? "bg-ink-200 text-ink-900 ring-ink-500" : "bg-surface text-ink-700 ring-ink-500 hover:bg-ink-50"
             }`}
           >
             {f.label} <span className="opacity-70">{f.count}</span>
@@ -154,7 +154,7 @@ export function ListDetail({
       <div className={`lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto ${open ? "" : "hidden lg:block"}`}>
         <button
           onClick={() => onSelect(null)}
-          className="mb-3 rounded-lg px-2 py-1 text-sm font-medium text-ink-700 ring-1 ring-ink-300 hover:bg-ink-50 lg:hidden"
+          className="mb-3 rounded-lg px-2 py-1 text-sm font-medium text-ink-700 ring-1 ring-ink-500 hover:bg-ink-50 lg:hidden"
         >
           ← Back to list
         </button>

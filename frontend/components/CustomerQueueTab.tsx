@@ -36,7 +36,7 @@ const NOT_SAVED = "Example only, not saved.";
 // Can't make here -> Send adjustments. On Can't make here, Approve as is is disabled.
 const BTN_FILLED_APPROVE = "bg-ok-700 text-surface hover:bg-ok-800";
 const BTN_FILLED_SEND = "bg-accent text-on-accent hover:opacity-90";
-const BTN_OUTLINE = "bg-surface text-ink-800 ring-1 ring-ink-300 hover:bg-ink-50";
+const BTN_OUTLINE = "bg-surface text-ink-800 ring-1 ring-ink-500 hover:bg-ink-50";
 
 function TargetsTable({ targets }: { targets: RequestTargets }) {
   return (
@@ -111,7 +111,7 @@ function AdjustForm({
         <button type="submit" className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:opacity-90">
           Send to customer
         </button>
-        <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-700 ring-1 ring-ink-300 hover:bg-surface">
+        <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-700 ring-1 ring-ink-500 hover:bg-surface">
           Cancel
         </button>
         <span className="text-xs text-ink-500">{NOT_SAVED}</span>

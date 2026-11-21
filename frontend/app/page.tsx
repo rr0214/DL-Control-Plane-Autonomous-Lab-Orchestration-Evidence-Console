@@ -80,7 +80,7 @@ export default function Home() {
           <button
             onClick={resetDemo}
             disabled={resetting}
-            className="rounded-lg bg-surface px-3 py-2 text-sm font-medium text-ink-800 shadow-sm ring-1 ring-ink-300 hover:bg-ink-50 disabled:opacity-50"
+            className="rounded-lg bg-surface px-3 py-2 text-sm font-medium text-ink-800 shadow-sm ring-1 ring-ink-500 hover:bg-ink-50 disabled:opacity-50"
           >
             {resetting ? "Resetting..." : "Reset Demo"}
           </button>
