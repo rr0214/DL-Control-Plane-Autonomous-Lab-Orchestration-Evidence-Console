@@ -33,7 +33,7 @@ export function StatusChip({ tone, children }: { tone: Tone; children: React.Rea
 
 export function ExampleDataBanner({ children }: { children: React.ReactNode }) {
   return (
-    <div role="note" className="mb-4 rounded-lg bg-warn-50 px-3 py-2 text-sm text-warn-900 ring-1 ring-warn-200">
+    <div role="note" className="mb-4 rounded-lg border border-warning bg-warn-50 px-3 py-2 text-sm text-warning">
       <span className="font-semibold">Example data.</span> {children}
     </div>
   );
@@ -72,7 +72,7 @@ export function QueueView<T extends string>({
             onClick={() => onFilter(f.id)}
             aria-pressed={filter === f.id}
             className={`rounded-full px-3 py-1 text-sm font-medium ring-1 transition ${
-              filter === f.id ? "bg-ink-900 text-surface ring-ink-900" : "bg-surface text-ink-700 ring-ink-300 hover:bg-ink-50"
+              filter === f.id ? "bg-accent text-on-accent ring-accent" : "bg-surface text-ink-700 ring-ink-300 hover:bg-ink-50"
             }`}
           >
             {f.label} <span className="opacity-70">{f.count}</span>

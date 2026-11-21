@@ -68,7 +68,7 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
         <button
           type="submit"
           disabled={busy || !value}
-          className="mt-4 w-full rounded-lg bg-ink-900 px-3 py-2 text-sm font-medium text-surface hover:bg-ink-700 disabled:opacity-50"
+          className="mt-4 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
         >
           {busy ? "Checking..." : "Enter"}
         </button>

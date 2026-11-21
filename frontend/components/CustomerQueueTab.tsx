@@ -90,7 +90,7 @@ function AdjustForm({
         />
       </label>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button type="submit" className="rounded-lg bg-ink-900 px-3 py-1.5 text-sm font-medium text-surface hover:bg-ink-700">
+        <button type="submit" className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:opacity-90">
           Send to customer
         </button>
         <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-700 ring-1 ring-ink-300 hover:bg-surface">

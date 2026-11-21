@@ -90,7 +90,7 @@ export default function Home() {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`min-w-[8rem] flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
-              tab === t.id ? "bg-ink-900 text-surface" : "text-ink-600 hover:bg-ink-100"
+              tab === t.id ? "bg-accent text-on-accent" : "text-ink-600 hover:bg-ink-100"
             }`}
           >
             {t.label}

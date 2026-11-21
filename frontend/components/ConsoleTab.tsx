@@ -245,7 +245,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
           <button
             onClick={runPlan}
             disabled={busy}
-            className="w-full rounded-lg bg-ink-900 px-3 py-2 text-sm font-medium text-surface hover:bg-ink-700 disabled:opacity-50"
+            className="w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
           >
             {busy ? "Working..." : "Plan next batch"}
           </button>
