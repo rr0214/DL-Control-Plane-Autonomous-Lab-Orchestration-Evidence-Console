@@ -6,25 +6,25 @@ import { LoopStep, apiFetch } from "@/lib/api";
 type Status = LoopStep["status"];
 
 const STATUS_TONE: Record<Status, string> = {
-  Built: "bg-emerald-100 text-emerald-800",
-  Mock: "bg-amber-100 text-amber-900",
-  Simulated: "bg-amber-100 text-amber-900",
-  "Partly built": "bg-sky-100 text-sky-900",
-  Planned: "bg-slate-100 text-slate-600",
+  Built: "bg-ok-100 text-ok-800",
+  Mock: "bg-warn-100 text-warn-900",
+  Simulated: "bg-warn-100 text-warn-900",
+  "Partly built": "bg-info-100 text-info-900",
+  Planned: "bg-ink-100 text-ink-600",
 };
 
 const TYPE_TONE: Record<LoopStep["type"], string> = {
-  LLM: "bg-violet-100 text-violet-800",
-  ML: "bg-amber-100 text-amber-900",
-  code: "bg-slate-200 text-slate-800",
-  person: "bg-emerald-100 text-emerald-800",
+  LLM: "bg-ai-100 text-ai-800",
+  ML: "bg-warn-100 text-warn-900",
+  code: "bg-ink-200 text-ink-800",
+  person: "bg-ok-100 text-ok-800",
 };
 
 function TypeTag({ type, mock }: { type: LoopStep["type"]; mock: boolean }) {
   return (
     <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${TYPE_TONE[type]}`}>
       {type}
-      {mock && <span className="rounded bg-white/70 px-1 text-[10px] uppercase">mock</span>}
+      {mock && <span className="rounded bg-surface/70 px-1 text-[10px] uppercase">mock</span>}
     </span>
   );
 }
@@ -61,7 +61,7 @@ function FlowDiagram() {
         <li
           key={s.name}
           className={`relative rounded-lg border-2 p-3 ${TYPE_TONE[s.type]} ${
-            s.simulated ? "border-dashed border-slate-500" : "border-solid border-transparent"
+            s.simulated ? "border-dashed border-ink-500" : "border-solid border-transparent"
           }`}
         >
           <div className="flex items-start justify-between gap-2">
@@ -69,13 +69,13 @@ function FlowDiagram() {
               {s.n && <span className="mr-1 font-mono text-xs opacity-70">{s.n}</span>}
               {s.name}
             </span>
-            <span className="whitespace-nowrap rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+            <span className="whitespace-nowrap rounded bg-surface/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
               {s.tag}
             </span>
           </div>
           <p className="mt-1 text-xs">{s.tech}</p>
           {i < FLOW.length - 1 && (
-            <span aria-hidden className="absolute -right-2 top-1/2 hidden -translate-y-1/2 text-slate-400 lg:block">
+            <span aria-hidden className="absolute -right-2 top-1/2 hidden -translate-y-1/2 text-ink-400 lg:block">
               ›
             </span>
           )}
@@ -87,12 +87,12 @@ function FlowDiagram() {
 
 function Collapsible({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <details className="group rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
+    <details className="group rounded-xl bg-surface p-4 shadow-sm ring-1 ring-ink-200">
+      <summary className="cursor-pointer list-none text-sm font-semibold text-ink-900">
         <span className="mr-2 inline-block transition group-open:rotate-90">▸</span>
         {title}
       </summary>
-      <div className="mt-3 text-sm text-slate-700">{children}</div>
+      <div className="mt-3 text-sm text-ink-700">{children}</div>
     </details>
   );
 }
@@ -122,18 +122,18 @@ export default function ArchitectureTab() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900">How a run works, step by step</h2>
-        <p className="mt-1 text-sm text-slate-600">
+      <div className="rounded-xl bg-surface p-5 shadow-sm ring-1 ring-ink-200">
+        <h2 className="text-lg font-semibold text-ink-900">How a run works, step by step</h2>
+        <p className="mt-1 text-sm text-ink-600">
           The AI proposes, plain code decides, and a human approves anything irreversible. Every step is recorded.
         </p>
 
         <FlowDiagram />
 
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-ink-500">
           Colors: green is a person, purple is an AI agent, yellow is math, gray is code. Dashed means simulated, not real. In step 3, code runs the literature lookup first, then Claude reads it and gives one answer.
         </p>
-        <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700 ring-1 ring-slate-200">
+        <p className="mt-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-700 ring-1 ring-ink-200">
           Under every step: LangGraph, SQLite checkpoints, FastAPI, Next.js, MCP tool gateway, Arize Phoenix traces through
           OpenTelemetry, and code evals.
         </p>
@@ -141,9 +141,9 @@ export default function ArchitectureTab() {
 
       <Collapsible title="Step details, read from the backend">
         {/* Wide screens: a table. */}
-        <div className="mt-4 hidden overflow-hidden rounded-lg ring-1 ring-slate-200 md:block">
+        <div className="mt-4 hidden overflow-hidden rounded-lg ring-1 ring-ink-200 md:block">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+            <thead className="bg-ink-50 text-xs uppercase tracking-wide text-ink-600">
               <tr>
                 <th className="px-3 py-2">#</th>
                 <th className="px-3 py-2">Step</th>
@@ -153,14 +153,14 @@ export default function ArchitectureTab() {
                 <th className="px-3 py-2">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-ink-200">
               {STEPS.map((s) => (
                 <tr key={s.n} className="align-top">
-                  <td className="px-3 py-3 font-mono text-xs text-slate-500">{s.n}</td>
-                  <td className="px-3 py-3 font-semibold text-slate-900">{s.step}</td>
+                  <td className="px-3 py-3 font-mono text-xs text-ink-500">{s.n}</td>
+                  <td className="px-3 py-3 font-semibold text-ink-900">{s.step}</td>
                   <td className="px-3 py-3"><TypeTag type={s.type} mock={s.mock} /></td>
-                  <td className="px-3 py-3 text-slate-700">{s.what}</td>
-                  <td className="px-3 py-3 text-slate-700">{s.tooling}</td>
+                  <td className="px-3 py-3 text-ink-700">{s.what}</td>
+                  <td className="px-3 py-3 text-ink-700">{s.tooling}</td>
                   <td className="px-3 py-3">
                     <StatusTag status={s.status} />
                   </td>
@@ -173,9 +173,9 @@ export default function ArchitectureTab() {
         {/* Phones: stacked cards. */}
         <ul className="mt-4 space-y-2 md:hidden">
           {STEPS.map((s) => (
-            <li key={s.n} className="rounded-lg border border-slate-200 p-3">
+            <li key={s.n} className="rounded-lg border border-ink-200 p-3">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-slate-900">
+                <span className="text-sm font-semibold text-ink-900">
                   {s.n}. {s.step}
                 </span>
                 <span className="flex gap-1">
@@ -183,13 +183,13 @@ export default function ArchitectureTab() {
                   <StatusTag status={s.status} />
                 </span>
               </div>
-              <p className="mt-1 text-sm text-slate-700">{s.what}</p>
-              <p className="mt-1 text-xs text-slate-500">{s.tooling}</p>
+              <p className="mt-1 text-sm text-ink-700">{s.what}</p>
+              <p className="mt-1 text-xs text-ink-500">{s.tooling}</p>
             </li>
           ))}
         </ul>
 
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-ink-500">
           LLM is a language model, ML is a numeric model, code is plain deterministic code, person is a human decision. Mock means a stand-in with demo values. Simulated means the readings are generated, not measured. The gate, the
           review pause, the receipts and the tracing are real.
         </p>
@@ -218,14 +218,14 @@ export default function ArchitectureTab() {
       <Collapsible title="Demo vs. real life">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase tracking-wide text-slate-600">
+            <thead className="text-xs uppercase tracking-wide text-ink-600">
               <tr>
                 <th className="py-1 pr-3"></th>
                 <th className="py-1 pr-3">This demo</th>
                 <th className="py-1">Real lab</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-ink-200">
               {[
                 ["LLM input", "Goal and run history", "Plus literature, lab schedule and past scientist notes"],
                 ["LLM output", "Search space and cited directions", "Plus a rationale a scientist can read"],
@@ -237,7 +237,7 @@ export default function ArchitectureTab() {
                 ["Lab", "Simulated readings", "Robots, SEM and XRD instruments"],
               ].map(([k, a, b]) => (
                 <tr key={k}>
-                  <td className="py-2 pr-3 font-medium text-slate-900">{k}</td>
+                  <td className="py-2 pr-3 font-medium text-ink-900">{k}</td>
                   <td className="py-2 pr-3">{a}</td>
                   <td className="py-2">{b}</td>
                 </tr>

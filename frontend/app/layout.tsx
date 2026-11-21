@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import PasswordGate from "@/components/PasswordGate";
+import "./tokens.css"; // design tokens: the one place to change colors, fonts, spacing and radius
 import "./globals.css";
 
 export const metadata: Metadata = {

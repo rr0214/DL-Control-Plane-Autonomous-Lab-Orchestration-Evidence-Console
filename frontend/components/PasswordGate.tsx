@@ -49,10 +49,10 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
   if (state === "checking") return null;
   return (
     <main className="mx-auto flex min-h-screen max-w-sm items-center px-4">
-      <form onSubmit={submit} className="w-full rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <h1 className="text-lg font-semibold text-slate-900">SDL Control Plane</h1>
-        <p className="mt-1 text-sm text-slate-600">This demo is password protected. Enter the password you were given.</p>
-        <label htmlFor="access-password" className="mt-4 block text-sm font-medium text-slate-700">
+      <form onSubmit={submit} className="w-full rounded-xl bg-surface p-6 shadow-sm ring-1 ring-ink-200">
+        <h1 className="text-lg font-semibold text-ink-900">SDL Control Plane</h1>
+        <p className="mt-1 text-sm text-ink-600">This demo is password protected. Enter the password you were given.</p>
+        <label htmlFor="access-password" className="mt-4 block text-sm font-medium text-ink-700">
           Password
         </label>
         <input
@@ -62,13 +62,13 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
           autoComplete="current-password"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="mt-1 w-full rounded-lg px-3 py-2 text-sm ring-1 ring-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+          className="mt-1 w-full rounded-lg px-3 py-2 text-sm ring-1 ring-ink-300 focus:outline-none focus:ring-2 focus:ring-ink-900"
         />
-        {wrong && <p className="mt-2 text-sm text-rose-700">That password did not work. Try again.</p>}
+        {wrong && <p className="mt-2 text-sm text-danger-700">That password did not work. Try again.</p>}
         <button
           type="submit"
           disabled={busy || !value}
-          className="mt-4 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          className="mt-4 w-full rounded-lg bg-ink-900 px-3 py-2 text-sm font-medium text-surface hover:bg-ink-700 disabled:opacity-50"
         >
           {busy ? "Checking..." : "Enter"}
         </button>
