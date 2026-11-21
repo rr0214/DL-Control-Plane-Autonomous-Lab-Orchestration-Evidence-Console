@@ -1,0 +1,84 @@
+# Render Blueprint for the SDL Control Plane demo. Three web services, all on the Starter plan.
+#
+# Public URLs (Render derives them from the service names; see DEPLOY.md if one is taken):
+#   console  https://sdl-console-rr.onrender.com
+#   API      https://sdl-api-rr.onrender.com
+#   Phoenix  https://sdl-phoenix-rr.onrender.com
+#
+# Secrets are never stored here. ANTHROPIC_API_KEY and SDL_ACCESS_PASSWORD use sync: false,
+# so Render asks for them in the dashboard when the Blueprint is first applied.
+
+services:
+  # Backend: FastAPI, LangGraph and SQLite. Data and workflow checkpoints live on the persistent disk.
+  - type: web
+    name: sdl-api-rr
+    runtime: python
+    plan: starter
+    region: oregon
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    disk:
+      name: sdl-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.11"
+      - key: SDL_DB_PATH
+        value: /var/data/sdl.db
+      - key: SDL_CHECKPOINT_PATH
+        value: /var/data/checkpoints.sqlite
+      - key: SDL_TRACING
+        value: "on"
+      - key: PHOENIX_COLLECTOR_ENDPOINT
+        value: https://sdl-phoenix-rr.onrender.com
+      - key: PHOENIX_PUBLIC_URL
+        value: https://sdl-phoenix-rr.onrender.com
+      - key: SDL_ALLOWED_ORIGINS
+        value: https://sdl-console-rr.onrender.com
+      # Most plan runs per UTC day (each can call Claude, about $0.01 to $0.02). 0 means no limit.
+      - key: SDL_DAILY_RUN_LIMIT
+        value: "25"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SDL_ACCESS_PASSWORD
+        sync: false
+
+  # Frontend: the Next.js console. NEXT_PUBLIC_API_URL is baked in at build time.
+  - type: web
+    name: sdl-console-rr
+    runtime: node
+    plan: starter
+    region: oregon
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXT_PUBLIC_API_URL
+        value: https://sdl-api-rr.onrender.com
+
+  # Phoenix: the trace viewer and OTLP collector, from the prebuilt image (Render's runtime for a public
+  # Docker image is "image"). Traces are kept on the persistent disk.
+  - type: web
+    name: sdl-phoenix-rr
+    runtime: image
+    plan: starter
+    region: oregon
+    image:
+      url: docker.io/arizephoenix/phoenix:version-21.0.0
+    disk:
+      name: phoenix-data
+      mountPath: /mnt/phoenix
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: "6006"
+      - key: PHOENIX_PORT
+        value: "6006"
+      - key: PHOENIX_HOST
+        value: 0.0.0.0
+      - key: PHOENIX_WORKING_DIR
+        value: /mnt/phoenix
