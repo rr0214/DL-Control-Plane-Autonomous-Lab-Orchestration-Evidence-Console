@@ -457,7 +457,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
               <button
                 disabled={busy}
                 onClick={() => review(pending.sample_id, "approve")}
-                className="rounded-md bg-ok-600 px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-50"
+                className="rounded-md bg-ok-700 px-3 py-1.5 text-sm font-medium text-surface hover:bg-ok-800 disabled:opacity-50"
               >
                 Approve
               </button>
@@ -465,7 +465,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
                 <button
                   disabled={busy}
                   onClick={() => review(pending.sample_id, "revise")}
-                  className="rounded-md bg-warn-600 px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-50"
+                  className="rounded-md bg-warn-800 px-3 py-1.5 text-sm font-medium text-surface hover:bg-warn-900 disabled:opacity-50"
                 >
                   Revise
                 </button>
@@ -473,7 +473,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
               <button
                 disabled={busy}
                 onClick={() => review(pending.sample_id, "reject")}
-                className="rounded-md bg-danger-600 px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-50"
+                className="rounded-md bg-danger-700 px-3 py-1.5 text-sm font-medium text-surface hover:bg-danger-800 disabled:opacity-50"
               >
                 Reject
               </button>

@@ -189,7 +189,7 @@ export default function CustomerQueueTab() {
                     onClick={() => decide(r.id, { kind: "approved" })}
                     disabled={check.status === "cannot"}
                     title={check.status === "cannot" ? "Outside lab limits. Send adjustments instead." : undefined}
-                    className="rounded-lg bg-ok-600 px-3 py-1.5 text-sm font-medium text-surface hover:bg-ok-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-lg bg-ok-700 px-3 py-1.5 text-sm font-medium text-surface hover:bg-ok-800 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Approve as is
                   </button>
