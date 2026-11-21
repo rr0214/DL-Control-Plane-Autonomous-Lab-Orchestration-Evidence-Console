@@ -62,7 +62,7 @@ export const CUSTOMER_REQUESTS: CustomerRequest[] = [
     targets: { serviceTempC: 800, minYieldStrengthMpa: 500, maxHafniumAtPct: 2 },
     avoid: ["Copper"],
     note: "Valve seat. Open to small hafnium additions.",
-    expectedCheck: "change",
+    expectedCheck: "ready",
   },
   {
     id: "REQ-1046",

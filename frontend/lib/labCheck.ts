@@ -5,6 +5,8 @@
 //   restrictedElements                    <- backend/app/config.py (RESTRICTED_ELEMENTS)
 // If those change in the backend, change them here too. A value exactly at a limit is allowed, as in target_check.py.
 // nearLimitMargin is a demo-only rule: a target within 5% under a limit is flagged so a scientist can look first.
+// Hafnium: a request that allows hafnium is compatible. The lab never uses hafnium (the backend safety gate blocks it),
+// so the recipe will be hafnium free. This adds a note, never a reason, so it does not change the status.
 export const LAB_LIMITS = {
   maxServiceTempC: 2200,
   maxYieldStrengthMpa: 2000,
@@ -26,7 +28,8 @@ export const LAB_CHECK_LABEL: Record<LabCheckStatus, string> = {
   cannot: "Can't make here",
 };
 
-export type LabCheckResult = { status: LabCheckStatus; label: string; reasons: string[] };
+// reasons decide the status; notes are shown to the scientist but never change it.
+export type LabCheckResult = { status: LabCheckStatus; label: string; reasons: string[]; notes: string[] };
 
 const near = (limit: number) => limit * (1 - LAB_LIMITS.nearLimitMargin);
 
@@ -34,6 +37,7 @@ export function labCheck(t: RequestTargets): LabCheckResult {
   const { maxServiceTempC: maxT, maxYieldStrengthMpa: maxS } = LAB_LIMITS;
   const cannot: string[] = [];
   const change: string[] = [];
+  const notes: string[] = [];
 
   if (t.serviceTempC > maxT) cannot.push(`Service temperature ${t.serviceTempC} °C is above the ${maxT} °C lab limit.`);
   else if (t.serviceTempC >= near(maxT))
@@ -43,20 +47,20 @@ export function labCheck(t: RequestTargets): LabCheckResult {
   else if (t.minYieldStrengthMpa >= near(maxS))
     change.push(`Yield strength ${t.minYieldStrengthMpa} MPa is within 5% of the ${maxS} MPa lab limit.`);
 
-  if (t.maxHafniumAtPct > 0)
-    change.push(`Allows up to ${t.maxHafniumAtPct} at% hafnium, but this lab does not use hafnium. Confirm a hafnium-free recipe.`);
+  if (t.maxHafniumAtPct > 0) notes.push(`Allows up to ${t.maxHafniumAtPct} at% hafnium. The recipe will be hafnium free.`);
 
   const status: LabCheckStatus = cannot.length ? "cannot" : change.length ? "change" : "ready";
-  return { status, label: LAB_CHECK_LABEL[status], reasons: [...cannot, ...change] };
+  return { status, label: LAB_CHECK_LABEL[status], reasons: [...cannot, ...change], notes };
 }
 
-// Targets the lab could take as they are: anything at or past the 5% margin comes down to just under it, and hafnium
-// goes to 0. Used to prefill "Send adjustments". Targets already inside every rule are returned unchanged.
+// Targets the lab could take as they are: anything at or past the 5% margin comes down to just under it. The
+// customer's hafnium allowance is kept, since allowing hafnium needs no change. Used to prefill "Send adjustments".
+// Targets already inside every rule are returned unchanged.
 export function suggestAdjustments(t: RequestTargets): RequestTargets {
   const cap = (value: number, limit: number) => (value >= near(limit) ? Math.floor(near(limit)) - 1 : value);
   return {
     serviceTempC: cap(t.serviceTempC, LAB_LIMITS.maxServiceTempC),
     minYieldStrengthMpa: cap(t.minYieldStrengthMpa, LAB_LIMITS.maxYieldStrengthMpa),
-    maxHafniumAtPct: 0,
+    maxHafniumAtPct: t.maxHafniumAtPct,
   };
 }

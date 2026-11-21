@@ -149,7 +149,7 @@ export default function CustomerQueueTab() {
         <>
           These customers and requests are fictional. Approve and Send adjustments only change this screen; nothing is
           sent or saved. Lab limits are the demo limits from the backend ({LAB_LIMITS.maxServiceTempC} °C,{" "}
-          {LAB_LIMITS.maxYieldStrengthMpa} MPa, no hafnium).
+          {LAB_LIMITS.maxYieldStrengthMpa} MPa; recipes are always hafnium free).
         </>
       }
       filters={[
@@ -236,7 +236,9 @@ export default function CustomerQueueTab() {
             </div>
             <div className={`mt-3 rounded-lg px-3 py-2 text-sm ring-1 ${PANEL_TONE[CHECK_TONE[check.status]]}`}>
               <span className="font-semibold">Lab check: {check.label}.</span>{" "}
-              {check.reasons.length ? check.reasons.join(" ") : "All targets are within the lab limits, with no hafnium."}
+              {check.reasons.length || check.notes.length
+                ? [...check.reasons, ...check.notes].join(" ")
+                : "All targets are within the lab limits, with no hafnium."}
             </div>
           </QueueCard>
         );
