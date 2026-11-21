@@ -84,12 +84,12 @@ export default function Home() {
         </div>
       </header>
 
-      <nav className="mb-6 flex gap-1 rounded-lg bg-surface p-1 shadow-sm ring-1 ring-ink-200">
+      <nav className="mb-6 flex flex-wrap gap-1 rounded-lg bg-surface p-1 shadow-sm ring-1 ring-ink-200">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+            className={`min-w-[8rem] flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
               tab === t.id ? "bg-ink-900 text-surface" : "text-ink-600 hover:bg-ink-100"
             }`}
           >
