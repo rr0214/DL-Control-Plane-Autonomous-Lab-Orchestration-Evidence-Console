@@ -71,7 +71,7 @@ export default function Home() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight text-ink-900">SDL Control Plane</h1>
-            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-on-accent">Internal</span>
+            <span className="rounded-full bg-ink-900 px-2 py-0.5 text-xs font-medium text-surface">Internal</span>
           </div>
           <p className="text-sm text-ink-600">Autonomous Lab Orchestration &amp; Evidence Console</p>
         </div>

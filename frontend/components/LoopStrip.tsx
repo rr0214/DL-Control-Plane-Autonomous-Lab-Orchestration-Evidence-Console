@@ -24,7 +24,7 @@ export default function LoopStrip({ current }: { current: number }) {
           const state = i < current ? "done" : i === current ? "current" : "todo";
           const tone =
             state === "current"
-              ? "bg-accent text-on-accent ring-accent"
+              ? "bg-ink-900 text-surface ring-ink-900"
               : state === "done"
                 ? "bg-ok-50 text-ok-800 ring-ok-200"
                 : "bg-ink-50 text-ink-500 ring-ink-200";

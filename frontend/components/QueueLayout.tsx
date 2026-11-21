@@ -72,7 +72,7 @@ export function QueueView<T extends string>({
             onClick={() => onFilter(f.id)}
             aria-pressed={filter === f.id}
             className={`rounded-full px-3 py-1 text-sm font-medium ring-1 transition ${
-              filter === f.id ? "bg-accent text-on-accent ring-accent" : "bg-surface text-ink-700 ring-ink-300 hover:bg-ink-50"
+              filter === f.id ? "bg-ink-200 text-ink-900 ring-ink-500" : "bg-surface text-ink-700 ring-ink-300 hover:bg-ink-50"
             }`}
           >
             {f.label} <span className="opacity-70">{f.count}</span>
@@ -178,8 +178,8 @@ export function ListRow({
         active ? "lg:ring-2 lg:ring-ink-900" : ""
       } ring-ink-200 hover:ring-ink-400`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="min-w-0 truncate font-medium text-ink-900">{title}</span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="min-w-0 font-medium text-ink-900">{title}</span>
         {chip}
       </div>
       <div className="mt-0.5 text-xs text-ink-500">{meta}</div>
