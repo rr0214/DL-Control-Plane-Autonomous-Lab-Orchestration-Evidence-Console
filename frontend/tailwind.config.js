@@ -22,6 +22,10 @@ module.exports = {
     extend: {
       colors: {
         surface: channel("surface"),
+        page: channel("bg"),
+        accent: channel("accent"),
+        "on-accent": channel("on-accent"),
+        warning: channel("warning"),
         ink: scale("ink"),
         ok: scale("ok"),
         warn: scale("warn"),

@@ -3,5 +3,5 @@
 @tailwind utilities;
 
 body {
-  @apply bg-ink-100 text-ink-900 antialiased;
+  @apply bg-page text-ink-900 antialiased;
 }

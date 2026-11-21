@@ -2,28 +2,39 @@
  *
  * Every color, font, spacing step and corner radius in the app reads from these variables, through the
  * Tailwind names in tailwind.config.js (for example bg-ink-100, text-ok-700, rounded-xl, p-4). Change a value
- * here and every screen follows. The default values are Tailwind's own, so the app looks exactly as it did
- * before the tokens existed.
+ * here and every screen follows. Neutrals and the accent come from the customer prototype's palette; the status
+ * scales (ok, warn, danger, error, info, ai, cite) keep their own accessible colors and never use the accent.
  *
  * Colors are written as "R G B" channels (no rgb()) so Tailwind opacity modifiers such as bg-surface/70 work.
  * Evidence label wording lives in lib/evidence.ts; their colors are the --evidence-* tokens below.
  */
 :root {
-  /* ---- Surfaces ---- */
-  --surface: 255 255 255; /* card and panel background; also text on dark buttons */
+  /* ---- Brand (customer prototype palette) ---- */
+  --bg: 255 255 255; /* #ffffff page background */
+  --text: 11 11 12; /* #0b0b0c main text */
+  --accent: 11 11 12; /* #0b0b0c primary actions and the Internal badge; never used for status */
+  --on-accent: 255 255 255; /* #ffffff text on the accent */
+  --panel: 245 246 245; /* #f5f6f5 cards */
+  --panel-inner: 236 238 237; /* #eceeed panels inside cards */
+  --border: 217 220 218; /* #d9dcda borders and dividers */
+  --muted: 93 99 96; /* #5d6360 secondary text */
+  --warning: 138 90 0; /* #8a5a00 warning text, for example the Example data banner */
 
-  /* ---- ink: Neutrals: text, borders, page and card backgrounds. (default: Tailwind slate) ---- */
-  --ink-50: 248 250 252;
-  --ink-100: 241 245 249;
-  --ink-200: 226 232 240;
-  --ink-300: 203 213 225;
-  --ink-400: 148 163 184;
-  --ink-500: 100 116 139;
-  --ink-600: 71 85 105;
-  --ink-700: 51 65 85;
-  --ink-800: 30 41 59;
-  --ink-900: 15 23 42;
-  --ink-950: 2 6 23;
+  /* ---- Surfaces ---- */
+  --surface: var(--panel); /* card background; also text on colored buttons */
+
+  /* ---- ink: Neutrals mapped onto the brand palette: 900 text, 400 and 500 muted, 200 border, 50 and 100 inner panel. 300, 600, 700, 800 are derived blends. ---- */
+  --ink-50: 236 238 237;
+  --ink-100: 236 238 237;
+  --ink-200: 217 220 218;
+  --ink-300: 180 185 182;
+  --ink-400: 93 99 96;
+  --ink-500: 93 99 96;
+  --ink-600: 71 76 74;
+  --ink-700: 46 50 48;
+  --ink-800: 26 28 27;
+  --ink-900: 11 11 12;
+  --ink-950: 11 11 12;
 
   /* ---- ok: Success and people: allowed, approved, Green. (default: Tailwind emerald) ---- */
   --ok-50: 236 253 245;
@@ -137,12 +148,14 @@
   /* ---- Spacing: every padding, margin, gap and size step is a multiple of this unit (p-4 = 4 units) ---- */
   --space-unit: 0.25rem;
 
-  /* ---- Corner radius ---- */
-  --radius-sm: 0.125rem;
+  /* ---- Corner radius: 4px on small items (chips, inputs, buttons using sm, default or md), 8px on cards (lg and
+   * up). Pills use rounded-full, which is not a token. ---- */
+  --radius-sm: 0.25rem;
   --radius: 0.25rem;
-  --radius-md: 0.375rem;
+  --radius-md: 0.25rem;
   --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1rem;
-  --radius-3xl: 1.5rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.5rem;
+  --radius-3xl: 0.5rem;
 }
+
