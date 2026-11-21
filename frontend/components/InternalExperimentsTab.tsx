@@ -95,19 +95,18 @@ export default function InternalExperimentsTab() {
                   </div>
                   <div>
                     <SectionLabel>Results</SectionLabel>
-                    <table className="w-full text-sm">
-                      <tbody>
-                        {e.results.map((r) => (
-                          <tr key={r.property} className="border-b border-ink-100 last:border-0">
-                            <td className="py-1 pr-2 text-ink-700">{r.property}</td>
-                            <td className="whitespace-nowrap py-1 pr-2 text-right font-mono text-ink-900">{r.value}</td>
-                            <td className="py-1 text-right">
-                              <EvidenceLabel kind={r.evidence} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    {/* Fixed three columns: name, value (right aligned), evidence label. */}
+                    <dl className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1.5 text-sm">
+                      {e.results.map((r) => (
+                        <div key={r.property} className="contents">
+                          <dt className="text-ink-700">{r.property}</dt>
+                          <dd className="whitespace-nowrap text-right font-mono text-ink-900">{r.value}</dd>
+                          <dd className="justify-self-end">
+                            <EvidenceLabel kind={r.evidence} />
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
                   </div>
                 </div>
               </QueueCard>

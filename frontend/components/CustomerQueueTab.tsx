@@ -42,7 +42,8 @@ function TargetsTable({ targets }: { targets: RequestTargets }) {
   return (
     <table className="w-full text-sm">
       <tbody>
-        {TARGET_ROWS.map((row) => (
+        {/* Hafnium only when the customer allows some; 0 is the lab's own rule and needs no row. */}
+        {TARGET_ROWS.filter((row) => row.key !== "maxHafniumAtPct" || targets.maxHafniumAtPct > 0).map((row) => (
           <tr key={row.key} className="border-b border-ink-100 last:border-0">
             <td className="py-1 pr-2 text-ink-700">{row.label}</td>
             <td className="py-1 pr-2 text-xs text-ink-500">{row.bound}</td>
