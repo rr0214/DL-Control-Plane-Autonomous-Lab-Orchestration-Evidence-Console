@@ -31,11 +31,21 @@ export function StatusChip({ tone, children }: { tone: Tone; children: React.Rea
   );
 }
 
+// One line, always visible. The longer explanation sits behind Details (native <details>: keyboard accessible).
 export function ExampleDataBanner({ children }: { children: React.ReactNode }) {
   return (
-    <div role="note" className="mb-4 rounded-lg border border-warning bg-warn-50 px-3 py-2 text-sm text-warning">
-      <span className="font-semibold">Example data.</span> {children}
-    </div>
+    <details className="group mb-4 rounded-lg border border-warning bg-warn-50 px-3 py-2 text-sm text-warning">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+        <span>
+          <span className="font-semibold">Example data.</span> Nothing is sent or saved.
+        </span>
+        <span className="text-xs font-medium underline underline-offset-2">
+          <span className="group-open:hidden">Details</span>
+          <span className="hidden group-open:inline">Hide details</span>
+        </span>
+      </summary>
+      <div className="mt-2">{children}</div>
+    </details>
   );
 }
 
