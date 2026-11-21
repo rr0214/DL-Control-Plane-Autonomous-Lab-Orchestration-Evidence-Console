@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LoopStep, apiFetch } from "@/lib/api";
+import SystemDiagram, { SystemDiagramLegend } from "./SystemDiagram";
 
 type Status = LoopStep["status"];
 
@@ -122,6 +123,17 @@ export default function ArchitectureTab() {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl bg-surface p-5 shadow-sm ring-1 ring-ink-200">
+        <h2 className="text-lg font-semibold text-ink-900">System architecture</h2>
+        <p className="mt-1 text-sm text-ink-600">
+          What runs where, how the parts talk, and what is real. Dashed, hatched boxes are simulated or example data.
+        </p>
+        <div className="mt-4">
+          <SystemDiagram />
+        </div>
+        <SystemDiagramLegend />
+      </div>
+
       <div className="rounded-xl bg-surface p-5 shadow-sm ring-1 ring-ink-200">
         <h2 className="text-lg font-semibold text-ink-900">How a run works, step by step</h2>
         <p className="mt-1 text-sm text-ink-600">
