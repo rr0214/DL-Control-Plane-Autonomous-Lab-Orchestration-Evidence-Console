@@ -1,7 +1,7 @@
 // Shared layout for list views (Customer queue, Internal experiments): one header, one Example data banner, one
 // filter row and one card style, so the views look and behave the same. Colors come from the design tokens.
 
-export type Tone = "ok" | "warn" | "danger" | "info" | "ai" | "ink";
+export type Tone = "ok" | "warn" | "danger" | "info" | "ai" | "cite" | "ink";
 
 const CHIP_TONE: Record<Tone, string> = {
   ok: "bg-ok-100 text-ok-800 ring-ok-300",
@@ -9,6 +9,7 @@ const CHIP_TONE: Record<Tone, string> = {
   danger: "bg-danger-100 text-danger-800 ring-danger-300",
   info: "bg-info-100 text-info-800 ring-info-300",
   ai: "bg-ai-100 text-ai-800 ring-ai-300",
+  cite: "bg-cite-100 text-cite-800 ring-cite-300",
   ink: "bg-ink-200 text-ink-700 ring-ink-300",
 };
 
@@ -18,6 +19,7 @@ export const PANEL_TONE: Record<Tone, string> = {
   danger: "bg-danger-50 text-danger-900 ring-danger-200",
   info: "bg-info-50 text-info-900 ring-info-200",
   ai: "bg-ai-50 text-ai-900 ring-ai-200",
+  cite: "bg-cite-50 text-cite-900 ring-cite-200",
   ink: "bg-ink-50 text-ink-800 ring-ink-200",
 };
 
