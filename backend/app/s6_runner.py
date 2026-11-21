@@ -244,7 +244,6 @@ def _main(argv: list[str] | None = None) -> int:
     work.mkdir(parents=True, exist_ok=True)
 
     from . import config, synth_cases, telemetry
-    from .telemetry import PHOENIX_UI_URL
 
     cases = synth_cases.load()
     if args.only:
@@ -290,10 +289,9 @@ def _main(argv: list[str] | None = None) -> int:
     provider = trace.get_tracer_provider()
     if tracing and hasattr(provider, "force_flush"):
         provider.force_flush(timeout_millis=10000)
-    project_id = phoenix_project_id(telemetry.live_project(), PHOENIX_UI_URL if not tracing else base) if tracing else None
-    url_base = PHOENIX_UI_URL if not tracing else base
-    for r in results:
-        r["trace_url"] = trace_url(url_base, project_id, r["trace_id"])
+    project_id = phoenix_project_id(telemetry.live_project(), base) if tracing else None
+    for r in results:  # links open in a browser, so they use the public Phoenix URL
+        r["trace_url"] = trace_url(telemetry.public_url(), project_id, r["trace_id"])
     (out_dir / "results.json").write_text(json.dumps({"results": results, "skipped": skipped, "phoenix_project": telemetry.live_project() if tracing else None}, indent=2), encoding="utf-8")
 
     from . import s6_export

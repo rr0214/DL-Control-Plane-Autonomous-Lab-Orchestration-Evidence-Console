@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { usePhoenixUrl, apiFetch } from "@/lib/api";
 
 // Error-analysis method (Hamel Husain). The numbers in the result panel come live from the backend,
 // which scores the golden dataset with the same code the Phoenix experiment uses.
@@ -62,6 +62,7 @@ type Usage = {
 };
 
 export default function EvalsTab() {
+  const phoenixUrl = usePhoenixUrl();
   const [data, setData] = useState<Summary | null>(null);
   const [error, setError] = useState(false);
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -238,7 +239,7 @@ export default function EvalsTab() {
       </div>
 
       <a
-        href="http://localhost:6006"
+        href={phoenixUrl}
         target="_blank"
         rel="noreferrer"
         className="inline-flex rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"

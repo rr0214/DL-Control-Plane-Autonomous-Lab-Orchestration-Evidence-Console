@@ -105,7 +105,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
             "status": "ok",
             "mcp_mode": gateway.mode,
             "tracing": telemetry.is_enabled(),
-            "phoenix_url": telemetry.PHOENIX_UI_URL,
+            "phoenix_url": telemetry.public_url(),
         }
 
     @app.get("/api/loop")

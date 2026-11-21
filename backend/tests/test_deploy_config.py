@@ -26,6 +26,50 @@ def test_cors_allows_only_the_configured_origin(monkeypatch, tmp_path):
     assert "access-control-allow-origin" not in other.headers
 
 
+# ---- Phoenix links and the reachability check ------------------------------------------------------
+
+from app import telemetry  # noqa: E402
+
+
+def test_phoenix_public_url_defaults_to_localhost_and_is_configurable(monkeypatch, tmp_path):
+    monkeypatch.delenv("PHOENIX_PUBLIC_URL", raising=False)
+    assert telemetry.public_url() == "http://localhost:6006"
+    monkeypatch.setenv("PHOENIX_PUBLIC_URL", "https://phoenix.example.com/")
+    assert telemetry.public_url() == "https://phoenix.example.com"
+    monkeypatch.setenv("SDL_DB_PATH", str(tmp_path / "sdl.db"))
+    client = TestClient(create_app(CampaignOrchestrator(str(tmp_path / "cp.sqlite"))))
+    assert client.get("/api/health").json()["phoenix_url"] == "https://phoenix.example.com"
+
+
+def test_phoenix_reachable_uses_443_for_https_and_80_for_http_without_a_port(monkeypatch):
+    seen = []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(telemetry.socket, "create_connection", lambda addr, timeout: seen.append(addr) or Conn())
+    assert telemetry.phoenix_reachable("https://phoenix.example.com")
+    assert telemetry.phoenix_reachable("http://phoenix.example.com")
+    assert telemetry.phoenix_reachable("http://localhost:6006")
+    assert seen == [("phoenix.example.com", 443), ("phoenix.example.com", 80), ("localhost", 6006)]
+
+
+def test_tracing_is_skipped_quietly_when_phoenix_is_down(monkeypatch):
+    def refuse(*a, **k):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(telemetry.socket, "create_connection", refuse)
+    monkeypatch.setitem(telemetry._state, "enabled", False)
+    monkeypatch.setenv("SDL_TRACING", "on")
+    monkeypatch.setenv("PHOENIX_COLLECTOR_ENDPOINT", "https://phoenix.example.com")
+    assert telemetry.phoenix_reachable() is False
+    assert telemetry.init_tracing() is False
+
+
 # ---- shared access password ------------------------------------------------------------------------
 
 import pytest  # noqa: E402

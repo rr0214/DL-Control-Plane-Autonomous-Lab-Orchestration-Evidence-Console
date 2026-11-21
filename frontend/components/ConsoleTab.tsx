@@ -3,7 +3,7 @@
 import { useState } from "react";
 import LoopStrip from "./LoopStrip";
 import ReleaseCard from "./ReleaseCard";
-import { CampaignView, PlanResult, SampleRecord, Span, Targets, TriageRecord, Verdict, apiFetch } from "@/lib/api";
+import { usePhoenixUrl, CampaignView, PlanResult, SampleRecord, Span, Targets, TriageRecord, Verdict, apiFetch } from "@/lib/api";
 
 const ROLES = ["Scientist (PI)", "Operator"];
 
@@ -104,6 +104,7 @@ function depthOf(span: Span, byId: Map<string, Span>): number {
 }
 
 export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignView | null; onChange: () => void }) {
+  const phoenixUrl = usePhoenixUrl();
   const [plan, setPlan] = useState<PlanResult | null>(null);
   const [role, setRole] = useState(ROLES[0]);
   const [note, setNote] = useState("");
@@ -596,7 +597,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Evidence and lineage</h2>
             <a
-              href="http://localhost:6006"
+              href={phoenixUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[11px] text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"

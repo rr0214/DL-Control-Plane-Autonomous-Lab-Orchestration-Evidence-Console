@@ -31,7 +31,6 @@ log = logging.getLogger(__name__)
 TRACER_NAME = "sdl-control-plane"
 DEFAULT_ENDPOINT = "http://localhost:6006"
 LIVE_PROJECT = "sdl-control-plane"
-PHOENIX_UI_URL = "http://localhost:6006"
 
 SPAN_KIND_ATTR = "openinference.span.kind"
 
@@ -40,6 +39,11 @@ _state = {"enabled": False}
 
 def endpoint() -> str:
     return os.getenv("PHOENIX_COLLECTOR_ENDPOINT", DEFAULT_ENDPOINT).rstrip("/")
+
+
+def public_url() -> str:
+    """Where people open Phoenix in a browser (every "Open trace" link). Set PHOENIX_PUBLIC_URL when hosted."""
+    return os.getenv("PHOENIX_PUBLIC_URL", "").strip().rstrip("/") or DEFAULT_ENDPOINT
 
 
 def live_project() -> str:
@@ -55,7 +59,10 @@ def is_enabled() -> bool:
 
 
 def phoenix_reachable(url: str | None = None, timeout: float = 0.3) -> bool:
-    """Cheap TCP check so startup never waits on a Phoenix that is not running."""
+    """Cheap TCP check so startup never waits on a Phoenix that is not running.
+
+    Works for a hosted https endpoint with no explicit port: 443 for https, 80 for http.
+    """
     parsed = urlparse(url or endpoint())
     host = parsed.hostname or "localhost"
     port = parsed.port or (443 if parsed.scheme == "https" else 80)

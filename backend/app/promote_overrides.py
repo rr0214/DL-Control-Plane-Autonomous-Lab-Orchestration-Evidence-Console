@@ -314,7 +314,8 @@ def promote(client: Any, project: str, dataset: str = DATASET_NAME, dry_run: boo
     return result
 
 
-def format_summary(r: PromotionResult, phoenix_url: str = telemetry.PHOENIX_UI_URL) -> str:
+def format_summary(r: PromotionResult, phoenix_url: str | None = None) -> str:
+    phoenix_url = phoenix_url or telemetry.public_url()
     lines = [
         "Scientist-override promotion" + ("  (DRY RUN, nothing written)" if r.dry_run else ""),
         f"  Phoenix:                   {phoenix_url}",

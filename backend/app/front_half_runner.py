@@ -173,7 +173,7 @@ def _main(argv: list[str] | None = None) -> int:
         provider.force_flush(timeout_millis=10000)
     project_id = phoenix_project_id(telemetry.live_project(), base) if tracing else None
     for r in results:
-        r["trace_url"] = trace_url(base, project_id, r["trace_id"])
+        r["trace_url"] = trace_url(telemetry.public_url(), project_id, r["trace_id"])  # opened in a browser
     (out_dir / "results.json").write_text(json.dumps(
         {"phoenix_project": telemetry.live_project() if tracing else None, "results": results, "skipped": skipped}, indent=2), encoding="utf-8")
     calls = sum(r["llm_totals"].get("calls", 0) for r in results)

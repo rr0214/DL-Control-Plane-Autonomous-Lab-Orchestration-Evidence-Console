@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 // Shared access password for a hosted demo (the backend's SDL_ACCESS_PASSWORD). Asked once, kept for this tab in
@@ -32,6 +34,20 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const res = await fetch(`${API}${path}`, { cache: "no-store", ...init, headers });
   if (res.status === 401 && typeof window !== "undefined") window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
   return res;
+}
+
+// Where every "Open trace" link points. The backend reads it from PHOENIX_PUBLIC_URL and reports it on /api/health.
+export const DEFAULT_PHOENIX_URL = "http://localhost:6006";
+
+export function usePhoenixUrl(): string {
+  const [url, setUrl] = useState(DEFAULT_PHOENIX_URL);
+  useEffect(() => {
+    apiFetch("/api/health")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b: { phoenix_url?: string } | null) => b?.phoenix_url && setUrl(b.phoenix_url))
+      .catch(() => {});
+  }, []);
+  return url;
 }
 
 export type Candidate = {
