@@ -12,9 +12,12 @@ export const metadata: Metadata = {
 // Inter, self-hosted by Next.js at build time (no request to Google from the browser). Only these three weights are used.
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-inter", display: "swap" });
 
+// The scientist console's theme: "light" or "dark" (colors in app/tokens.css).
+const DEFAULT_THEME = "light";
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" data-theme={DEFAULT_THEME} className={inter.variable}>
       <body>
         <PasswordGate>{children}</PasswordGate>
       </body>

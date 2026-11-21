@@ -5,10 +5,14 @@
  * here and every screen follows. Neutrals and the accent come from the customer prototype's palette; the status
  * scales (ok, warn, danger, error, info, ai, cite) keep their own accessible colors and never use the accent.
  *
+ * Two themes: light is :root and [data-theme="light"], dark is [data-theme="dark"] at the end of this file.
+ * The theme is set on <html> in app/layout.tsx (DEFAULT_THEME).
+ *
  * Colors are written as "R G B" channels (no rgb()) so Tailwind opacity modifiers such as bg-surface/70 work.
  * Evidence label wording lives in lib/evidence.ts; their colors are the --evidence-* tokens below.
  */
-:root {
+:root,
+[data-theme="light"] {
   /* ---- Brand (customer prototype palette) ---- */
   --bg: 255 255 255; /* #ffffff page background */
   --text: 11 11 12; /* #0b0b0c main text */
@@ -159,3 +163,108 @@
   --radius-3xl: 0.5rem;
 }
 
+/* Dark theme. Same names, so no component changes. Status scales are flipped (50 swaps with 950, 100 with 900, and
+ * so on): a light chip such as bg-ok-100 with text-ok-800 becomes a dark tint with light text, keeping its contrast.
+ * Evidence labels follow because they point at these scales. */
+[data-theme="dark"] {
+  /* ---- Brand (customer prototype palette) ---- */
+  --bg: 10 10 10; /* #0a0a0a page background */
+  --text: 229 231 230; /* #e5e7e6 main text */
+  --accent: 244 236 58; /* #f4ec3a primary actions and the Internal badge; never used for status */
+  --on-accent: 10 10 10; /* #0a0a0a text on the accent */
+  --panel: 20 20 20; /* #141414 cards */
+  --panel-inner: 28 28 28; /* #1c1c1c panels inside cards */
+  --border: 44 44 44; /* #2c2c2c borders and dividers */
+  --muted: 163 168 166; /* #a3a8a6 secondary text */
+  --warning: 242 185 75; /* #f2b94b warning text, for example the Example data banner */
+
+  --ink-50: 28 28 28;
+  --ink-100: 28 28 28;
+  --ink-200: 44 44 44;
+  --ink-300: 74 78 76;
+  --ink-400: 163 168 166;
+  --ink-500: 163 168 166;
+  --ink-600: 184 188 186;
+  --ink-700: 205 208 206;
+  --ink-800: 218 220 219;
+  --ink-900: 229 231 230;
+  --ink-950: 229 231 230;
+
+  --ok-50: 2 44 34;
+  --ok-100: 6 78 59;
+  --ok-200: 6 95 70;
+  --ok-300: 4 120 87;
+  --ok-400: 5 150 105;
+  --ok-500: 16 185 129;
+  --ok-600: 52 211 153;
+  --ok-700: 110 231 183;
+  --ok-800: 167 243 208;
+  --ok-900: 209 250 229;
+  --ok-950: 236 253 245;
+  --warn-50: 69 26 3;
+  --warn-100: 120 53 15;
+  --warn-200: 146 64 14;
+  --warn-300: 180 83 9;
+  --warn-400: 217 119 6;
+  --warn-500: 245 158 11;
+  --warn-600: 251 191 36;
+  --warn-700: 252 211 77;
+  --warn-800: 253 230 138;
+  --warn-900: 254 243 199;
+  --warn-950: 255 251 235;
+  --danger-50: 76 5 25;
+  --danger-100: 136 19 55;
+  --danger-200: 159 18 57;
+  --danger-300: 190 18 60;
+  --danger-400: 225 29 72;
+  --danger-500: 244 63 94;
+  --danger-600: 251 113 133;
+  --danger-700: 253 164 175;
+  --danger-800: 254 205 211;
+  --danger-900: 255 228 230;
+  --danger-950: 255 241 242;
+  --error-50: 69 10 10;
+  --error-100: 127 29 29;
+  --error-200: 153 27 27;
+  --error-300: 185 28 28;
+  --error-400: 220 38 38;
+  --error-500: 239 68 68;
+  --error-600: 248 113 113;
+  --error-700: 252 165 165;
+  --error-800: 254 202 202;
+  --error-900: 254 226 226;
+  --error-950: 254 242 242;
+  --info-50: 8 47 73;
+  --info-100: 12 74 110;
+  --info-200: 7 89 133;
+  --info-300: 3 105 161;
+  --info-400: 2 132 199;
+  --info-500: 14 165 233;
+  --info-600: 56 189 248;
+  --info-700: 125 211 252;
+  --info-800: 186 230 253;
+  --info-900: 224 242 254;
+  --info-950: 240 249 255;
+  --ai-50: 46 16 101;
+  --ai-100: 76 29 149;
+  --ai-200: 91 33 182;
+  --ai-300: 109 40 217;
+  --ai-400: 124 58 237;
+  --ai-500: 139 92 246;
+  --ai-600: 167 139 250;
+  --ai-700: 196 181 253;
+  --ai-800: 221 214 254;
+  --ai-900: 237 233 254;
+  --ai-950: 245 243 255;
+  --cite-50: 30 27 75;
+  --cite-100: 49 46 129;
+  --cite-200: 55 48 163;
+  --cite-300: 67 56 202;
+  --cite-400: 79 70 229;
+  --cite-500: 99 102 241;
+  --cite-600: 129 140 248;
+  --cite-700: 165 180 252;
+  --cite-800: 199 210 254;
+  --cite-900: 224 231 255;
+  --cite-950: 238 242 255;
+}
