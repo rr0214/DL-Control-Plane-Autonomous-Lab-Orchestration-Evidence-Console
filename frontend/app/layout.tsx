@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import PasswordGate from "@/components/PasswordGate";
+import ThemePreview from "@/components/ThemePreview";
 import "./tokens.css"; // design tokens: the one place to change colors, fonts, spacing and radius
 import "./globals.css";
 
@@ -17,8 +18,9 @@ const DEFAULT_THEME = "light";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme={DEFAULT_THEME} className={inter.variable}>
+    <html lang="en" data-theme={DEFAULT_THEME} className={inter.variable} suppressHydrationWarning>
       <body>
+        <ThemePreview />
         <PasswordGate>{children}</PasswordGate>
       </body>
     </html>
