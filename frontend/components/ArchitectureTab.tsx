@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API, LoopStep } from "@/lib/api";
+import { LoopStep, apiFetch } from "@/lib/api";
 
 type Status = LoopStep["status"];
 
@@ -103,11 +103,11 @@ export default function ArchitectureTab() {
   const [STEPS, setSteps] = useState<LoopStep[]>([]);
 
   useEffect(() => {
-    fetch(`${API}/api/health`, { cache: "no-store" })
+    apiFetch(`/api/health`, { cache: "no-store" })
       .then((r) => r.json())
       .then((b: { mcp_mode?: string }) => setMcpMode(b.mcp_mode ?? null))
       .catch(() => setMcpMode(null));
-    fetch(`${API}/api/loop`, { cache: "no-store" })
+    apiFetch(`/api/loop`, { cache: "no-store" })
       .then((r) => r.json())
       .then((b: { steps: LoopStep[] }) => setSteps(b.steps))
       .catch(() => setSteps([]));

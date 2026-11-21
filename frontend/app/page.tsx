@@ -5,7 +5,7 @@ import ArchitectureTab from "@/components/ArchitectureTab";
 import ConsoleTab from "@/components/ConsoleTab";
 // Evals tab hidden for now. To bring it back, uncomment this import, its TABS entry and its render line below.
 // import EvalsTab from "@/components/EvalsTab";
-import { API, CampaignView } from "@/lib/api";
+import { API, CampaignView, apiFetch } from "@/lib/api";
 
 const TABS = [
   { id: "console", label: "Lab Control Console" },
@@ -25,7 +25,7 @@ export default function Home() {
 
   const loadCampaign = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/api/campaigns/CAMP-014`, { cache: "no-store" });
+      const res = await apiFetch(`/api/campaigns/CAMP-014`, { cache: "no-store" });
       if (!res.ok) throw new Error(`Backend returned ${res.status}`);
       setCampaign(await res.json());
       setBackendError(null);
@@ -46,7 +46,7 @@ export default function Home() {
     setResetting(true);
     setResetNote(null);
     try {
-      const res = await fetch(`${API}/api/demo/reset?campaign_id=CAMP-014`, {
+      const res = await apiFetch(`/api/demo/reset?campaign_id=CAMP-014`, {
         method: "POST",
         headers: { "X-Role": "Scientist (PI)" },
       });

@@ -1,11 +1,14 @@
 """FastAPI surface for the SDL Control Plane."""
 from __future__ import annotations
 
+import hmac
 import uuid
 from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field
 
 from . import config, db, llm_usage, release, run_evals, seed_camp014, steps, telemetry
@@ -56,8 +59,26 @@ def _with_trace(thread_id: str, out: dict) -> dict:
     return dict(out, trace=trace, mcp_mode=gateway.mode)
 
 
+OPEN_PATHS = {"/health"}  # the platform health check needs no password
+
+
+class AccessPassword(BaseHTTPMiddleware):
+    """When SDL_ACCESS_PASSWORD is set, every route except /health needs a matching X-Access-Password header.
+    Unset (local use), nothing is checked. CORS preflights pass so the browser can ask before sending the header."""
+
+    async def dispatch(self, request, call_next):
+        expected = config.access_password()
+        if expected and request.method != "OPTIONS" and request.url.path not in OPEN_PATHS:
+            given = request.headers.get("x-access-password", "")
+            if not hmac.compare_digest(given.encode(), expected.encode()):
+                return JSONResponse({"detail": "Access password required"}, status_code=401)
+        return await call_next(request)
+
+
 def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
     app = FastAPI(title="SDL Control Plane API", version="0.5.0")
+    # Added before CORS so CORS wraps it: a 401 still carries CORS headers and the browser can read it.
+    app.add_middleware(AccessPassword)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.allowed_origins(),  # SDL_ALLOWED_ORIGINS, comma separated; localhost by default
@@ -72,6 +93,11 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
         if app.state.orchestrator is None:
             app.state.orchestrator = CampaignOrchestrator()
         return app.state.orchestrator
+
+    @app.get("/health")
+    def platform_health() -> dict:
+        """Liveness for the hosting platform. Open even when a password is set; reports nothing else."""
+        return {"status": "ok"}
 
     @app.get("/api/health")
     def health() -> dict:

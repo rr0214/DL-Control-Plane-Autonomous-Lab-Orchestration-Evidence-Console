@@ -35,7 +35,11 @@ def trace_headers(extra: dict | None = None) -> dict:
     starts a new trace for each request and one case would be split into three traces."""
     from opentelemetry.propagate import inject
 
+    from .config import access_password
+
     headers = dict(extra or {})
+    if access_password():  # the runners call the API in process, so they need the shared password when one is set
+        headers["X-Access-Password"] = access_password()
     inject(headers)
     return headers
 

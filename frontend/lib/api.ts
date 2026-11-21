@@ -1,5 +1,39 @@
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// Shared access password for a hosted demo (the backend's SDL_ACCESS_PASSWORD). Asked once, kept for this tab in
+// sessionStorage, and sent on every API call. When the backend has no password set, none is ever asked for.
+const PASSWORD_KEY = "sdl-access-password";
+export const AUTH_REQUIRED_EVENT = "sdl-auth-required";
+let memoryPassword = ""; // used when sessionStorage is blocked
+
+export function getAccessPassword(): string {
+  try {
+    return window.sessionStorage.getItem(PASSWORD_KEY) ?? memoryPassword;
+  } catch {
+    return memoryPassword;
+  }
+}
+
+export function setAccessPassword(password: string): void {
+  memoryPassword = password;
+  try {
+    if (password) window.sessionStorage.setItem(PASSWORD_KEY, password);
+    else window.sessionStorage.removeItem(PASSWORD_KEY);
+  } catch {
+    // sessionStorage blocked: the in-memory copy still works until the page reloads
+  }
+}
+
+// Every call to the backend goes through here, so the password header is never forgotten.
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const password = typeof window === "undefined" ? "" : getAccessPassword();
+  if (password) headers.set("X-Access-Password", password);
+  const res = await fetch(`${API}${path}`, { cache: "no-store", ...init, headers });
+  if (res.status === 401 && typeof window !== "undefined") window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+  return res;
+}
+
 export type Candidate = {
   candidate_id: string;
   composition: string;

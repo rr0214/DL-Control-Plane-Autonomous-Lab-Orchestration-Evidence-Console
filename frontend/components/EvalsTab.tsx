@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 // Error-analysis method (Hamel Husain). The numbers in the result panel come live from the backend,
 // which scores the golden dataset with the same code the Phoenix experiment uses.
@@ -67,14 +67,14 @@ export default function EvalsTab() {
   const [usage, setUsage] = useState<Usage | null>(null);
 
   useEffect(() => {
-    fetch(`${API}/api/evals/summary`, { cache: "no-store" })
+    apiFetch(`/api/evals/summary`, { cache: "no-store" })
       .then((r) => {
         if (!r.ok) throw new Error(String(r.status));
         return r.json();
       })
       .then((b: Summary) => setData(b))
       .catch(() => setError(true));
-    fetch(`${API}/api/usage/summary`, { cache: "no-store" })
+    apiFetch(`/api/usage/summary`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((b: Usage | null) => setUsage(b))
       .catch(() => setUsage(null));

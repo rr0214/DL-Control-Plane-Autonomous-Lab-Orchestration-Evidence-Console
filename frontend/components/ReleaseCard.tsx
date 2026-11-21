@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 // Loop step 11 (a person decides). The comparison and the rules come from the backend; this only shows them.
 
@@ -27,7 +27,7 @@ export default function ReleaseCard({ sampleId, role, onChange }: { sampleId: st
 
   async function load() {
     try {
-      const res = await fetch(`${API}/api/samples/${sampleId}/release`, { cache: "no-store" });
+      const res = await apiFetch(`/api/samples/${sampleId}/release`, { cache: "no-store" });
       setData(res.ok ? await res.json() : null);
     } catch {
       setData(null);
@@ -45,7 +45,7 @@ export default function ReleaseCard({ sampleId, role, onChange }: { sampleId: st
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/api/samples/${sampleId}/release`, {
+      const res = await apiFetch(`/api/samples/${sampleId}/release`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Role": role },
         body: JSON.stringify({ decision, note }),

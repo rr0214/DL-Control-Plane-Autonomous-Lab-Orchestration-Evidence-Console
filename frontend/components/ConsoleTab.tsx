@@ -3,7 +3,7 @@
 import { useState } from "react";
 import LoopStrip from "./LoopStrip";
 import ReleaseCard from "./ReleaseCard";
-import { API, CampaignView, PlanResult, SampleRecord, Span, Targets, TriageRecord, Verdict } from "@/lib/api";
+import { CampaignView, PlanResult, SampleRecord, Span, Targets, TriageRecord, Verdict, apiFetch } from "@/lib/api";
 
 const ROLES = ["Scientist (PI)", "Operator"];
 
@@ -121,7 +121,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/api/campaigns/plan`, {
+      const res = await apiFetch(`/api/campaigns/plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ campaign_id: "CAMP-014", ...(activeTargets ? { targets: activeTargets } : {}) }),
@@ -142,7 +142,7 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/api/samples/${sampleId}/review`, {
+      const res = await apiFetch(`/api/samples/${sampleId}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Role": role },
         body: JSON.stringify({ decision, note }),

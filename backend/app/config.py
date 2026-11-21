@@ -40,6 +40,11 @@ def agent_model(agent: str) -> str:
     return os.getenv(f"SDL_MODEL_{agent.upper()}", "").strip() or os.getenv("ANTHROPIC_MODEL", "").strip() or DEFAULT_MODEL
 
 
+def access_password() -> str:
+    """Shared password for a hosted demo. Empty (the default) means no password, so local use is unchanged."""
+    return os.getenv("SDL_ACCESS_PASSWORD", "").strip()
+
+
 DEFAULT_ALLOWED_ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000")
 
 
