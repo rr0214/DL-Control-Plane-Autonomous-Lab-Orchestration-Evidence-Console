@@ -32,6 +32,12 @@ const TARGET_ROWS: { key: keyof RequestTargets; label: string; bound: string; un
 
 const NOT_SAVED = "Example only, not saved.";
 
+// Which action is the filled (main) one follows the lab check: Ready to make -> Approve as is; Needs a change and
+// Can't make here -> Send adjustments. On Can't make here, Approve as is is disabled.
+const BTN_FILLED_APPROVE = "bg-ok-700 text-surface hover:bg-ok-800";
+const BTN_FILLED_SEND = "bg-accent text-on-accent hover:opacity-90";
+const BTN_OUTLINE = "bg-surface text-ink-800 ring-1 ring-ink-300 hover:bg-ink-50";
+
 function TargetsTable({ targets }: { targets: RequestTargets }) {
   return (
     <table className="w-full text-sm">
@@ -223,18 +229,20 @@ export default function CustomerQueueTab() {
                         onClick={() => decide(r.id, { kind: "approved" })}
                         disabled={check.status === "cannot"}
                         title={check.status === "cannot" ? "Outside lab limits. Send adjustments instead." : undefined}
-                        className="rounded-lg bg-ok-700 px-3 py-1.5 text-sm font-medium text-surface hover:bg-ok-800 disabled:cursor-not-allowed disabled:opacity-40"
+                        className={`rounded-lg px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+                          check.status === "ready" ? BTN_FILLED_APPROVE : BTN_OUTLINE
+                        }`}
                       >
                         Approve as is
                       </button>
                       <button
                         onClick={() => setEditing(r.id)}
-                        className="rounded-lg bg-surface px-3 py-1.5 text-sm font-medium text-ink-800 ring-1 ring-ink-300 hover:bg-ink-50"
+                        className={`rounded-lg px-3 py-1.5 text-sm font-medium ${check.status === "ready" ? BTN_OUTLINE : BTN_FILLED_SEND}`}
                       >
                         Send adjustments
                       </button>
                       {check.status === "cannot" && (
-                        <span className="text-xs text-ink-500">Outside lab limits, so it cannot be approved as is.</span>
+                        <span className="text-xs text-ink-600">Can&apos;t approve as is: outside lab limits.</span>
                       )}
                     </div>
                   )
