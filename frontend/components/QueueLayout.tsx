@@ -95,7 +95,7 @@ export function QueueCard({
   dataId: string;
   title: React.ReactNode;
   subtitle: React.ReactNode;
-  chip: React.ReactNode;
+  chip?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {

@@ -213,7 +213,6 @@ export default function CustomerQueueTab() {
                   </>
                 }
                 subtitle={`Received ${formatDate(r.received)} · ${r.note}`}
-                chip={<StatusChip tone={CHECK_TONE[check.status]}>{check.label}</StatusChip>}
                 footer={
                   decision ? (
                     <DecisionNote decision={decision} onUndo={() => decide(r.id, null)} />
