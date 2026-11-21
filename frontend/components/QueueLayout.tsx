@@ -79,7 +79,7 @@ export function QueueView<T extends string>({
           </button>
         ))}
       </div>
-      <ul className="space-y-3">{children}</ul>
+      {children}
     </section>
   );
 }
@@ -100,7 +100,7 @@ export function QueueCard({
   footer?: React.ReactNode;
 }) {
   return (
-    <li data-id={dataId} className="rounded-xl bg-surface p-4 shadow-sm ring-1 ring-ink-200">
+    <div data-id={dataId} className="rounded-xl bg-surface p-4 shadow-sm ring-1 ring-ink-200">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="font-semibold text-ink-900">{title}</div>
@@ -110,8 +110,86 @@ export function QueueCard({
       </div>
       <div className="mt-3">{children}</div>
       {footer && <div className="mt-4 border-t border-ink-100 pt-3">{footer}</div>}
-    </li>
+    </div>
   );
+}
+
+// List and detail. From 1024px up: compact rows on the left and a sticky detail panel on the right, showing the
+// selected row (or the first one). Below 1024px: the list only; tapping a row opens its detail with a Back button.
+export function ListDetail({
+  ids,
+  selectedId,
+  onSelect,
+  renderRow,
+  renderDetail,
+  empty,
+}: {
+  ids: string[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  renderRow: (id: string, active: boolean) => React.ReactNode;
+  renderDetail: (id: string) => React.ReactNode;
+  empty: string;
+}) {
+  if (ids.length === 0) return <p className="text-sm text-ink-500">{empty}</p>;
+  const open = selectedId && ids.includes(selectedId) ? selectedId : null; // a row hidden by the filter closes
+  const shownId = open ?? ids[0];
+  return (
+    <div className="lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start lg:gap-4">
+      <ul className={`space-y-2 ${open ? "hidden lg:block" : ""}`}>
+        {ids.map((id) => (
+          <li key={id}>{renderRow(id, id === shownId)}</li>
+        ))}
+      </ul>
+      <div className={`lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto ${open ? "" : "hidden lg:block"}`}>
+        <button
+          onClick={() => onSelect(null)}
+          className="mb-3 rounded-lg px-2 py-1 text-sm font-medium text-ink-700 ring-1 ring-ink-300 hover:bg-ink-50 lg:hidden"
+        >
+          ← Back to list
+        </button>
+        {renderDetail(shownId)}
+      </div>
+    </div>
+  );
+}
+
+export function ListRow({
+  id,
+  active,
+  onClick,
+  title,
+  meta,
+  chip,
+}: {
+  id: string;
+  active: boolean;
+  onClick: () => void;
+  title: React.ReactNode;
+  meta: React.ReactNode;
+  chip: React.ReactNode;
+}) {
+  return (
+    <button
+      data-row={id}
+      onClick={onClick}
+      aria-current={active ? "true" : undefined}
+      className={`w-full rounded-lg bg-surface px-3 py-2 text-left ring-1 transition ${
+        active ? "lg:ring-2 lg:ring-ink-900" : ""
+      } ring-ink-200 hover:ring-ink-400`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 truncate font-medium text-ink-900">{title}</span>
+        {chip}
+      </div>
+      <div className="mt-0.5 text-xs text-ink-500">{meta}</div>
+    </button>
+  );
+}
+
+// Selecting a row on a narrow screen opens the detail in place of the list, so start it at the top of the page.
+export function scrollToTopIfNarrow() {
+  if (typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) window.scrollTo({ top: 0 });
 }
 
 export function SectionLabel({ children }: { children: React.ReactNode }) {

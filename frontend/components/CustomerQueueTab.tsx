@@ -1,7 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { PANEL_TONE, QueueCard, QueueView, SectionLabel, StatusChip, Tone, formatDate } from "./QueueLayout";
+import {
+  ListDetail,
+  ListRow,
+  PANEL_TONE,
+  QueueCard,
+  QueueView,
+  SectionLabel,
+  StatusChip,
+  Tone,
+  formatDate,
+  scrollToTopIfNarrow,
+} from "./QueueLayout";
 import { LAB_CHECK_LABEL, LAB_LIMITS, LabCheckStatus, RequestTargets, labCheck, suggestAdjustments } from "@/lib/labCheck";
 import { CUSTOMER_REQUESTS, CustomerRequest } from "@/lib/seed/customerRequests";
 
@@ -124,12 +135,14 @@ export default function CustomerQueueTab() {
   const [filter, setFilter] = useState<Filter>("all");
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [editing, setEditing] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
   const rows = [...CUSTOMER_REQUESTS]
     .sort((a, b) => a.received.localeCompare(b.received)) // oldest first
     .map((r) => ({ request: r, check: labCheck(r.targets) }));
   const count = (s: LabCheckStatus) => rows.filter((r) => r.check.status === s).length;
   const shown = rows.filter((r) => filter === "all" || r.check.status === filter);
+  const byId = new Map(rows.map((row) => [row.request.id, row] as const));
 
   const decide = (id: string, decision: Decision | null) => {
     setDecisions((d) => {
@@ -161,89 +174,110 @@ export default function CustomerQueueTab() {
       filter={filter}
       onFilter={setFilter}
     >
-      {shown.map(({ request: r, check }) => {
-        const decision = decisions[r.id];
-        return (
-          <QueueCard
-            key={r.id}
-            dataId={r.id}
-            title={
-              <>
-                {r.customer} <span className="font-mono text-xs font-normal text-ink-500">{r.id}</span>
-              </>
-            }
-            subtitle={`Received ${formatDate(r.received)} · ${r.note}`}
-            chip={<StatusChip tone={CHECK_TONE[check.status]}>{check.label}</StatusChip>}
-            footer={
-              decision ? (
-                <DecisionNote decision={decision} onUndo={() => decide(r.id, null)} />
-              ) : editing === r.id ? (
-                <AdjustForm
-                  request={r}
-                  onSend={(targets, note) => decide(r.id, { kind: "adjusted", targets, note })}
-                  onCancel={() => setEditing(null)}
-                />
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => decide(r.id, { kind: "approved" })}
-                    disabled={check.status === "cannot"}
-                    title={check.status === "cannot" ? "Outside lab limits. Send adjustments instead." : undefined}
-                    className="rounded-lg bg-ok-700 px-3 py-1.5 text-sm font-medium text-surface hover:bg-ok-800 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Approve as is
-                  </button>
-                  <button
-                    onClick={() => setEditing(r.id)}
-                    className="rounded-lg bg-surface px-3 py-1.5 text-sm font-medium text-ink-800 ring-1 ring-ink-300 hover:bg-ink-50"
-                  >
-                    Send adjustments
-                  </button>
-                  {check.status === "cannot" && (
-                    <span className="text-xs text-ink-500">Outside lab limits, so it cannot be approved as is.</span>
-                  )}
-                </div>
-              )
-            }
-          >
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
-                <SectionLabel>Priorities</SectionLabel>
-                <ol className="list-inside list-decimal space-y-0.5 text-sm text-ink-800">
-                  {r.priorities.map((p) => (
-                    <li key={p}>{p}</li>
-                  ))}
-                </ol>
-              </div>
-              <div>
-                <SectionLabel>Property targets</SectionLabel>
-                <TargetsTable targets={r.targets} />
-              </div>
-              <div>
-                <SectionLabel>Materials to avoid</SectionLabel>
-                {r.avoid.length ? (
-                  <div className="flex flex-wrap gap-1">
-                    {r.avoid.map((m) => (
-                      <StatusChip key={m} tone="ink">
-                        {m}
-                      </StatusChip>
-                    ))}
+      <ListDetail
+        ids={shown.map((row) => row.request.id)}
+        selectedId={selected}
+        onSelect={setSelected}
+        empty="No requests with this lab check result."
+        renderRow={(id, active) => {
+          const { request: r, check } = byId.get(id)!;
+          return (
+            <ListRow
+              id={id}
+              active={active}
+              onClick={() => {
+                setSelected(id);
+                scrollToTopIfNarrow();
+              }}
+              title={r.customer}
+              meta={`${r.id} · Received ${formatDate(r.received)}`}
+              chip={<StatusChip tone={CHECK_TONE[check.status]}>{check.label}</StatusChip>}
+            />
+          );
+        }}
+        renderDetail={(id) => {
+          const { request: r, check } = byId.get(id)!;
+          const decision = decisions[r.id];
+          return (
+              <QueueCard
+                dataId={r.id}
+                title={
+                  <>
+                    {r.customer} <span className="font-mono text-xs font-normal text-ink-500">{r.id}</span>
+                  </>
+                }
+                subtitle={`Received ${formatDate(r.received)} · ${r.note}`}
+                chip={<StatusChip tone={CHECK_TONE[check.status]}>{check.label}</StatusChip>}
+                footer={
+                  decision ? (
+                    <DecisionNote decision={decision} onUndo={() => decide(r.id, null)} />
+                  ) : editing === r.id ? (
+                    <AdjustForm
+                      request={r}
+                      onSend={(targets, note) => decide(r.id, { kind: "adjusted", targets, note })}
+                      onCancel={() => setEditing(null)}
+                    />
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => decide(r.id, { kind: "approved" })}
+                        disabled={check.status === "cannot"}
+                        title={check.status === "cannot" ? "Outside lab limits. Send adjustments instead." : undefined}
+                        className="rounded-lg bg-ok-700 px-3 py-1.5 text-sm font-medium text-surface hover:bg-ok-800 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Approve as is
+                      </button>
+                      <button
+                        onClick={() => setEditing(r.id)}
+                        className="rounded-lg bg-surface px-3 py-1.5 text-sm font-medium text-ink-800 ring-1 ring-ink-300 hover:bg-ink-50"
+                      >
+                        Send adjustments
+                      </button>
+                      {check.status === "cannot" && (
+                        <span className="text-xs text-ink-500">Outside lab limits, so it cannot be approved as is.</span>
+                      )}
+                    </div>
+                  )
+                }
+              >
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <SectionLabel>Priorities</SectionLabel>
+                    <ol className="list-inside list-decimal space-y-0.5 text-sm text-ink-800">
+                      {r.priorities.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ol>
                   </div>
-                ) : (
-                  <p className="text-sm text-ink-500">None listed</p>
-                )}
-              </div>
-            </div>
-            <div className={`mt-3 rounded-lg px-3 py-2 text-sm ring-1 ${PANEL_TONE[CHECK_TONE[check.status]]}`}>
-              <span className="font-semibold">Lab check: {check.label}.</span>{" "}
-              {check.reasons.length || check.notes.length
-                ? [...check.reasons, ...check.notes].join(" ")
-                : "All targets are within the lab limits, with no hafnium."}
-            </div>
-          </QueueCard>
-        );
-      })}
-      {shown.length === 0 && <li className="text-sm text-ink-500">No requests with this lab check result.</li>}
+                  <div>
+                    <SectionLabel>Property targets</SectionLabel>
+                    <TargetsTable targets={r.targets} />
+                  </div>
+                  <div>
+                    <SectionLabel>Materials to avoid</SectionLabel>
+                    {r.avoid.length ? (
+                      <div className="flex flex-wrap gap-1">
+                        {r.avoid.map((m) => (
+                          <StatusChip key={m} tone="ink">
+                            {m}
+                          </StatusChip>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-ink-500">None listed</p>
+                    )}
+                  </div>
+                </div>
+                <div className={`mt-3 rounded-lg px-3 py-2 text-sm ring-1 ${PANEL_TONE[CHECK_TONE[check.status]]}`}>
+                  <span className="font-semibold">Lab check: {check.label}.</span>{" "}
+                  {check.reasons.length || check.notes.length
+                    ? [...check.reasons, ...check.notes].join(" ")
+                    : "All targets are within the lab limits, with no hafnium."}
+                </div>
+              </QueueCard>
+          );
+        }}
+      />
     </QueueView>
   );
 }
