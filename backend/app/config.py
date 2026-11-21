@@ -38,3 +38,13 @@ def agent_model(agent: str) -> str:
     if agent not in AGENTS:
         raise ValueError(f"unknown agent {agent!r}; expected one of {AGENTS}")
     return os.getenv(f"SDL_MODEL_{agent.upper()}", "").strip() or os.getenv("ANTHROPIC_MODEL", "").strip() or DEFAULT_MODEL
+
+
+DEFAULT_ALLOWED_ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000")
+
+
+def allowed_origins() -> list[str]:
+    """Browser origins the API accepts (CORS). SDL_ALLOWED_ORIGINS is comma separated; unset means local use."""
+    raw = os.getenv("SDL_ALLOWED_ORIGINS", "")
+    origins = [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+    return origins or list(DEFAULT_ALLOWED_ORIGINS)

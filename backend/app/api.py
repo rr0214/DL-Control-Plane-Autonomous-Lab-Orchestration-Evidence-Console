@@ -8,7 +8,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import db, llm_usage, release, run_evals, seed_camp014, steps, telemetry
+from . import config, db, llm_usage, release, run_evals, seed_camp014, steps, telemetry
 from .mcp_server import gateway
 from .orchestrator import CampaignOrchestrator
 from .targets import CustomerTargets
@@ -60,7 +60,7 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
     app = FastAPI(title="SDL Control Plane API", version="0.5.0")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_origins=config.allowed_origins(),  # SDL_ALLOWED_ORIGINS, comma separated; localhost by default
         allow_methods=["*"],
         allow_headers=["*"],
     )
