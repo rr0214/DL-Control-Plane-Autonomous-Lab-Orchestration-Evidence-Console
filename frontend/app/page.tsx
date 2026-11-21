@@ -69,7 +69,10 @@ export default function Home() {
     <main className="mx-auto max-w-7xl px-4 py-6">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink-900">SDL Control Plane</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">SDL Control Plane</h1>
+            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-on-accent">Internal</span>
+          </div>
           <p className="text-sm text-ink-600">Autonomous Lab Orchestration &amp; Evidence Console</p>
         </div>
         <div className="flex items-center gap-3">
