@@ -127,7 +127,15 @@ export default function ConsoleTab({ campaign, onChange }: { campaign: CampaignV
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ campaign_id: "CAMP-014", ...(activeTargets ? { targets: activeTargets } : {}) }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const text = await res.text();
+        let detail = text;
+        try {
+          const d = JSON.parse(text).detail;
+          if (typeof d === "string") detail = d; // e.g. the daily run limit message
+        } catch {}
+        throw new Error(detail);
+      }
       setPlan(await res.json());
       setSelectedSample(null);
       setSelectedSpan(null);

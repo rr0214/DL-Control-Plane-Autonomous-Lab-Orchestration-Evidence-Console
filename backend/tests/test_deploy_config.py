@@ -1,4 +1,4 @@
-"""Deploy settings: CORS origins from SDL_ALLOWED_ORIGINS, with localhost when unset. No network."""
+"""Deploy settings: CORS origins, the public Phoenix URL, the shared password and the daily run limit. No network."""
 from fastapi.testclient import TestClient
 
 from app import config
@@ -107,3 +107,64 @@ def test_without_a_password_nothing_changes(monkeypatch, tmp_path):
     assert client.get("/api/loop").status_code == 200 and client.get("/health").status_code == 200
 
 
+# ---- daily run limit ----------------------------------------------------------------------------------
+
+from app import db  # noqa: E402
+
+
+def _plan_client(monkeypatch, tmp_path, limit: str | None) -> TestClient:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")  # mock plans: no Claude calls in tests
+    monkeypatch.delenv("SDL_ACCESS_PASSWORD", raising=False)
+    monkeypatch.setenv("SDL_DB_PATH", str(tmp_path / "sdl.db"))
+    if limit is None:
+        monkeypatch.delenv("SDL_DAILY_RUN_LIMIT", raising=False)
+    else:
+        monkeypatch.setenv("SDL_DAILY_RUN_LIMIT", limit)
+    return TestClient(create_app(CampaignOrchestrator(str(tmp_path / "cp.sqlite"))))
+
+
+def _plan(client: TestClient):
+    return client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-014"})
+
+
+def test_daily_run_limit_setting(monkeypatch):
+    monkeypatch.delenv("SDL_DAILY_RUN_LIMIT", raising=False)
+    assert config.daily_run_limit() == 0
+    monkeypatch.setenv("SDL_DAILY_RUN_LIMIT", " 25 ")
+    assert config.daily_run_limit() == 25
+    for bad in ("ten", "2.5", "-1"):
+        monkeypatch.setenv("SDL_DAILY_RUN_LIMIT", bad)
+        with pytest.raises(ValueError):
+            config.daily_run_limit()
+
+
+def test_no_limit_by_default(monkeypatch, tmp_path):
+    client = _plan_client(monkeypatch, tmp_path, None)
+    assert all(_plan(client).status_code == 200 for _ in range(3))
+
+
+def test_runs_past_the_daily_limit_get_429_and_reset_demo_does_not_clear_the_count(monkeypatch, tmp_path):
+    client = _plan_client(monkeypatch, tmp_path, "2")
+    assert _plan(client).status_code == 200
+    assert _plan(client).status_code == 200
+    over = _plan(client)
+    assert over.status_code == 429
+    assert over.json()["detail"] == "Daily run limit reached (2 of 2 today). It resets at midnight UTC."
+    assert client.post("/api/demo/reset", headers={"X-Role": "Scientist (PI)"}).status_code == 200
+    assert _plan(client).status_code == 429
+
+
+def test_a_rejected_request_does_not_use_up_a_run(monkeypatch, tmp_path):
+    client = _plan_client(monkeypatch, tmp_path, "1")
+    assert client.post("/api/campaigns/plan", json={"campaign_id": "CAMP-999"}).status_code == 404
+    assert _plan(client).status_code == 200
+
+
+def test_the_count_is_per_utc_day(tmp_path):
+    conn = db.connect(str(tmp_path / "sdl.db"))
+    try:
+        assert db.take_run(conn, 1, day="2026-11-20") == (True, 1)
+        assert db.take_run(conn, 1, day="2026-11-20") == (False, 1)
+        assert db.take_run(conn, 1, day="2026-11-21") == (True, 1)
+    finally:
+        conn.close()

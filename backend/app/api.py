@@ -181,6 +181,11 @@ def create_app(orchestrator: CampaignOrchestrator | None = None) -> FastAPI:
         try:
             if conn.execute("SELECT 1 FROM plans WHERE thread_id = ?", (thread_id,)).fetchone():
                 raise HTTPException(409, f"Thread {thread_id} already exists")
+            limit = config.daily_run_limit()
+            if limit:  # each plan can call Claude, so a hosted demo caps how many run per day
+                allowed, used = db.take_run(conn, limit)
+                if not allowed:
+                    raise HTTPException(429, f"Daily run limit reached ({used} of {limit} today). It resets at midnight UTC.")
             out = orch().plan(body.campaign_id, thread_id, body.targets.model_dump() if body.targets else None, body.forced_search_space)
             _persist(conn, thread_id, body.campaign_id, out)
         finally:

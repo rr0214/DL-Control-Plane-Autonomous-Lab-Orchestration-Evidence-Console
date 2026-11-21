@@ -71,6 +71,10 @@ CREATE TABLE IF NOT EXISTS samples (
     measurements_json TEXT NOT NULL DEFAULT '{}',
     updated_at     TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS run_counts (
+    day   TEXT PRIMARY KEY,
+    count INTEGER NOT NULL
+);
 """
 
 SEED_CAMPAIGNS = [
@@ -147,6 +151,29 @@ def save_plan(conn: sqlite3.Connection, thread_id: str, campaign_id: str, summar
         (thread_id, campaign_id, summary["status"], summary.get("llm_mode"), json.dumps(summary, default=str), now, now),
     )
     conn.commit()
+
+
+def take_run(conn: sqlite3.Connection, limit: int, day: str | None = None) -> tuple[bool, int]:
+    """Count one plan run against today's limit (UTC). Returns (allowed, runs used today, this one included if allowed).
+
+    Kept in its own table so Reset Demo, which clears plans, does not reset the count. The read and the increment
+    happen in one write transaction, so two runs arriving together cannot both take the last slot."""
+    day = day or datetime.now(timezone.utc).date().isoformat()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        row = conn.execute("SELECT count FROM run_counts WHERE day = ?", (day,)).fetchone()
+        used = row["count"] if row else 0
+        if used >= limit:
+            conn.rollback()
+            return False, used
+        conn.execute(
+            "INSERT INTO run_counts (day, count) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET count = count + 1", (day,)
+        )
+        conn.commit()
+        return True, used + 1
+    except BaseException:
+        conn.rollback()
+        raise
 
 
 def save_sample(conn: sqlite3.Connection, thread_id: str, campaign_id: str, record: dict) -> None:

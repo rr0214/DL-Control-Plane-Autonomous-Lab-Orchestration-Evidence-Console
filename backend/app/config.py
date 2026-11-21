@@ -45,6 +45,21 @@ def access_password() -> str:
     return os.getenv("SDL_ACCESS_PASSWORD", "").strip()
 
 
+def daily_run_limit() -> int:
+    """Most plan runs the API accepts per UTC day (SDL_DAILY_RUN_LIMIT). Unset or 0 means no limit, so local use is
+    unchanged. A value that is not a whole number of 0 or more is an error, not a silent "no limit"."""
+    raw = os.getenv("SDL_DAILY_RUN_LIMIT", "").strip()
+    if not raw:
+        return 0
+    try:
+        limit = int(raw)
+    except ValueError:
+        raise ValueError(f"SDL_DAILY_RUN_LIMIT must be a whole number, got {raw!r}") from None
+    if limit < 0:
+        raise ValueError(f"SDL_DAILY_RUN_LIMIT must be 0 or more, got {limit}")
+    return limit
+
+
 DEFAULT_ALLOWED_ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000")
 
 
