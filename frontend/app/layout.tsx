@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import PasswordGate from "@/components/PasswordGate";
 import PrototypeBanner from "@/components/app/PrototypeBanner";
 import { THEME_KEY } from "@/lib/settings";
@@ -12,8 +12,10 @@ export const metadata: Metadata = {
   description: "Autonomous Lab Orchestration & Evidence Console",
 };
 
-// Inter, self-hosted by Next.js at build time (no request to Google from the browser). Only these three weights are used.
-const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-inter", display: "swap" });
+// Inter, bundled in the repo (app/fonts, SIL Open Font License in Inter-OFL.txt), so the build never downloads it.
+// One variable-font file for the Latin range covers the three weights used (400, 500, 600); every character the UI uses
+// is in that range or falls back to the system font, as it did with the Google-hosted copy.
+const inter = localFont({ src: "./fonts/Inter-latin.woff2", weight: "400 600", variable: "--font-inter", display: "swap" });
 
 // The scientist console's theme: "light" or "dark" (colors in app/tokens.css). Light is the default, so a first visit
 // opens in light; the header's theme switch saves the person's choice, and this script applies it before paint.
