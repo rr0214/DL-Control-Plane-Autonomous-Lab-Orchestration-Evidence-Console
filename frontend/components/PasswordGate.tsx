@@ -1,11 +1,17 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { AUTH_REQUIRED_EVENT, apiFetch, setAccessPassword } from "@/lib/api";
 
 // Shows a small password screen only when the backend asks for one (SDL_ACCESS_PASSWORD is set there).
 // Locally there is no password, the first check succeeds, and the app renders as before.
+// The Architecture page is static explanation for visitors, so it is shown without the password. Every API call still
+// needs the password on the server; the page only shows what it can read.
+const OPEN_PAGES = ["/architecture"];
+
 export default function PasswordGate({ children }: { children: React.ReactNode }) {
+  const open = OPEN_PAGES.includes(usePathname());
   const [state, setState] = useState<"checking" | "open" | "locked">("checking");
   const [value, setValue] = useState("");
   const [wrong, setWrong] = useState(false);
@@ -45,14 +51,15 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
     }
   }
 
-  if (state === "open") return <>{children}</>;
+  if (state === "open" || open) return <>{children}</>;
   if (state === "checking") return null;
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm items-center px-4">
-      <form onSubmit={submit} className="w-full rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <h1 className="text-lg font-semibold text-slate-900">SDL Control Plane</h1>
-        <p className="mt-1 text-sm text-slate-600">This demo is password protected. Enter the password you were given.</p>
-        <label htmlFor="access-password" className="mt-4 block text-sm font-medium text-slate-700">
+    <main className="mx-auto flex min-h-[70vh] max-w-sm items-center px-4 py-8">
+      <form onSubmit={submit} className="w-full rounded-xl bg-surface p-6 shadow-sm ring-1 ring-ink-200">
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-700">Radical</div>
+        <h1 className="mt-1 text-lg font-semibold text-ink-900">SDL Control Plane</h1>
+        <p className="mt-1 text-sm text-ink-600">Scientist console. Enter the shared password you were given.</p>
+        <label htmlFor="access-password" className="mt-4 block text-sm font-medium text-ink-700">
           Password
         </label>
         <input
@@ -62,13 +69,13 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
           autoComplete="current-password"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="mt-1 w-full rounded-lg px-3 py-2 text-sm ring-1 ring-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+          className="mt-1 w-full rounded-lg bg-page px-3 py-2 text-sm text-ink-900 ring-1 ring-ink-500 focus:outline-none focus:ring-2 focus:ring-ink-900"
         />
-        {wrong && <p className="mt-2 text-sm text-rose-700">That password did not work. Try again.</p>}
+        {wrong && <p className="mt-2 text-sm text-danger-700">That password did not work. Try again.</p>}
         <button
           type="submit"
           disabled={busy || !value}
-          className="mt-4 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          className="mt-4 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
         >
           {busy ? "Checking..." : "Enter"}
         </button>

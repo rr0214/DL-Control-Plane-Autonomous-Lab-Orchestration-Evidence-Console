@@ -3,5 +3,13 @@
 @tailwind utilities;
 
 body {
-  @apply bg-slate-100 text-slate-900 antialiased;
+  @apply bg-page text-ink-900 antialiased;
+}
+
+/* Phone widths only (below Tailwind's sm, 640px): every button, filter pill included, is at least 44px tall so it is
+ * easy to tap. Desktop sizes are unchanged. */
+@media (max-width: 639px) {
+  button {
+    min-height: 44px;
+  }
 }

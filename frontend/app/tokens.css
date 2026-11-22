@@ -1,0 +1,270 @@
+/* Design tokens: the one place to change how the console looks.
+ *
+ * Every color, font, spacing step and corner radius in the app reads from these variables, through the
+ * Tailwind names in tailwind.config.js (for example bg-ink-100, text-ok-700, rounded-xl, p-4). Change a value
+ * here and every screen follows. Neutrals and the accent come from the customer prototype's palette; the status
+ * scales (ok, warn, danger, error, info, ai, cite) keep their own accessible colors and never use the accent.
+ *
+ * Two themes: light is :root and [data-theme="light"], dark is [data-theme="dark"] at the end of this file.
+ * The theme is set on <html> in app/layout.tsx (DEFAULT_THEME).
+ *
+ * Colors are written as "R G B" channels (no rgb()) so Tailwind opacity modifiers such as bg-surface/70 work.
+ * Evidence label wording lives in lib/evidence.ts; their colors are the --evidence-* tokens below.
+ */
+:root,
+[data-theme="light"] {
+  /* ---- Brand (customer prototype palette) ---- */
+  --bg: 255 255 255; /* #ffffff page background */
+  --text: 11 11 12; /* #0b0b0c main text */
+  --accent: 11 11 12; /* #0b0b0c primary actions and the Internal badge; never used for status */
+  --on-accent: 255 255 255; /* #ffffff text on the accent */
+  --panel: 245 246 245; /* #f5f6f5 cards */
+  --panel-inner: 236 238 237; /* #eceeed panels inside cards */
+  --border: 217 220 218; /* #d9dcda borders and dividers */
+  --muted: 79 85 82; /* #4f5552 secondary text */
+  --warning: 138 90 0; /* #8a5a00 warning text, for example the Example data banner */
+
+  /* ---- Surfaces ---- */
+  --surface: var(--panel); /* card background; also text on colored buttons */
+
+  /* ---- ink: Neutrals mapped onto the brand palette: 900 text, 400 and 500 muted, 200 border, 50 and 100 inner panel. 300, 600, 700, 800 are derived blends. ---- */
+  --ink-50: 236 238 237;
+  --ink-100: 236 238 237;
+  --ink-200: 217 220 218;
+  --ink-300: 180 185 182;
+  --ink-400: 79 85 82;
+  --ink-500: 79 85 82;
+  --ink-600: 71 76 74;
+  --ink-700: 46 50 48;
+  --ink-800: 26 28 27;
+  --ink-900: 11 11 12;
+  --ink-950: 11 11 12;
+
+  /* ---- ok: Success and people: allowed, approved, Green. (default: Tailwind emerald) ---- */
+  --ok-50: 236 253 245;
+  --ok-100: 209 250 229;
+  --ok-200: 167 243 208;
+  --ok-300: 110 231 183;
+  --ok-400: 52 211 153;
+  --ok-500: 16 185 129;
+  --ok-600: 5 150 105;
+  --ok-700: 4 120 87;
+  --ok-800: 6 95 70;
+  --ok-900: 6 78 59;
+  --ok-950: 2 44 34;
+
+  /* ---- warn: Needs attention: review needed, Yellow, simulated. (default: Tailwind amber) ---- */
+  --warn-50: 255 251 235;
+  --warn-100: 254 243 199;
+  --warn-200: 253 230 138;
+  --warn-300: 252 211 77;
+  --warn-400: 251 191 36;
+  --warn-500: 245 158 11;
+  --warn-600: 217 119 6;
+  --warn-700: 180 83 9;
+  --warn-800: 146 64 14;
+  --warn-900: 120 53 15;
+  --warn-950: 69 26 3;
+
+  /* ---- danger: Stops: blocked, rejected, held, export control. (default: Tailwind rose) ---- */
+  --danger-50: 255 241 242;
+  --danger-100: 255 228 230;
+  --danger-200: 254 205 211;
+  --danger-300: 253 164 175;
+  --danger-400: 251 113 133;
+  --danger-500: 244 63 94;
+  --danger-600: 225 29 72;
+  --danger-700: 190 18 60;
+  --danger-800: 159 18 57;
+  --danger-900: 136 19 55;
+  --danger-950: 76 5 25;
+
+  /* ---- error: Error text and failed checks. (default: Tailwind red) ---- */
+  --error-50: 254 242 242;
+  --error-100: 254 226 226;
+  --error-200: 254 202 202;
+  --error-300: 252 165 165;
+  --error-400: 248 113 113;
+  --error-500: 239 68 68;
+  --error-600: 220 38 38;
+  --error-700: 185 28 28;
+  --error-800: 153 27 27;
+  --error-900: 127 29 29;
+  --error-950: 69 10 10;
+
+  /* ---- info: Information and links. (default: Tailwind sky) ---- */
+  --info-50: 240 249 255;
+  --info-100: 224 242 254;
+  --info-200: 186 230 253;
+  --info-300: 125 211 252;
+  --info-400: 56 189 248;
+  --info-500: 14 165 233;
+  --info-600: 2 132 199;
+  --info-700: 3 105 161;
+  --info-800: 7 89 133;
+  --info-900: 12 74 110;
+  --info-950: 8 47 73;
+
+  /* ---- ai: AI agent steps. (default: Tailwind violet) ---- */
+  --ai-50: 245 243 255;
+  --ai-100: 237 233 254;
+  --ai-200: 221 214 254;
+  --ai-300: 196 181 253;
+  --ai-400: 167 139 250;
+  --ai-500: 139 92 246;
+  --ai-600: 124 58 237;
+  --ai-700: 109 40 217;
+  --ai-800: 91 33 182;
+  --ai-900: 76 29 149;
+  --ai-950: 46 16 101;
+
+  /* ---- cite: Literature and citations. (default: Tailwind indigo) ---- */
+  --cite-50: 238 242 255;
+  --cite-100: 224 231 255;
+  --cite-200: 199 210 254;
+  --cite-300: 165 180 252;
+  --cite-400: 129 140 248;
+  --cite-500: 99 102 241;
+  --cite-600: 79 70 229;
+  --cite-700: 67 56 202;
+  --cite-800: 55 48 163;
+  --cite-900: 49 46 129;
+  --cite-950: 30 27 75;
+
+  /* ---- Evidence labels: Measured, Predicted, Proposed to test, From literature ---- */
+  --evidence-measured-bg: var(--ok-100);
+  --evidence-measured-fg: var(--ok-800);
+  --evidence-measured-ring: var(--ok-300);
+  --evidence-predicted-bg: var(--info-100);
+  --evidence-predicted-fg: var(--info-800);
+  --evidence-predicted-ring: var(--info-300);
+  --evidence-proposed-bg: var(--warn-100);
+  --evidence-proposed-fg: var(--warn-900);
+  --evidence-proposed-ring: var(--warn-300);
+  --evidence-literature-bg: var(--cite-100);
+  --evidence-literature-fg: var(--cite-800);
+  --evidence-literature-ring: var(--cite-300);
+
+  /* ---- Fonts ---- */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* ---- Spacing: every padding, margin, gap and size step is a multiple of this unit (p-4 = 4 units) ---- */
+  --space-unit: 0.25rem;
+
+  /* ---- Corner radius: 4px on small items (chips, inputs, buttons using sm, default or md), 8px on cards (lg and
+   * up). Pills use rounded-full, which is not a token. ---- */
+  --radius-sm: 0.25rem;
+  --radius: 0.25rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.5rem;
+  --radius-3xl: 0.5rem;
+}
+
+/* Dark theme. Same names, so no component changes. Status scales are flipped (50 swaps with 950, 100 with 900, and
+ * so on): a light chip such as bg-ok-100 with text-ok-800 becomes a dark tint with light text, keeping its contrast.
+ * Evidence labels follow because they point at these scales. */
+[data-theme="dark"] {
+  /* ---- Brand (customer prototype palette) ---- */
+  --bg: 10 10 10; /* #0a0a0a page background */
+  --text: 229 231 230; /* #e5e7e6 main text */
+  --accent: 244 236 58; /* #f4ec3a primary actions and the Internal badge; never used for status */
+  --on-accent: 10 10 10; /* #0a0a0a text on the accent */
+  --panel: 20 20 20; /* #141414 cards */
+  --panel-inner: 28 28 28; /* #1c1c1c panels inside cards */
+  --border: 44 44 44; /* #2c2c2c borders and dividers */
+  --muted: 163 168 166; /* #a3a8a6 secondary text */
+  --warning: 242 185 75; /* #f2b94b warning text, for example the Example data banner */
+
+  --ink-50: 28 28 28;
+  --ink-100: 28 28 28;
+  --ink-200: 44 44 44;
+  --ink-300: 74 78 76;
+  --ink-400: 163 168 166;
+  --ink-500: 163 168 166;
+  --ink-600: 184 188 186;
+  --ink-700: 205 208 206;
+  --ink-800: 218 220 219;
+  --ink-900: 229 231 230;
+  --ink-950: 229 231 230;
+
+  --ok-50: 2 44 34;
+  --ok-100: 6 78 59;
+  --ok-200: 6 95 70;
+  --ok-300: 4 120 87;
+  --ok-400: 5 150 105;
+  --ok-500: 16 185 129;
+  --ok-600: 52 211 153;
+  --ok-700: 110 231 183;
+  --ok-800: 167 243 208;
+  --ok-900: 209 250 229;
+  --ok-950: 236 253 245;
+  --warn-50: 69 26 3;
+  --warn-100: 120 53 15;
+  --warn-200: 146 64 14;
+  --warn-300: 180 83 9;
+  --warn-400: 217 119 6;
+  --warn-500: 245 158 11;
+  --warn-600: 251 191 36;
+  --warn-700: 252 211 77;
+  --warn-800: 253 230 138;
+  --warn-900: 254 243 199;
+  --warn-950: 255 251 235;
+  --danger-50: 76 5 25;
+  --danger-100: 136 19 55;
+  --danger-200: 159 18 57;
+  --danger-300: 190 18 60;
+  --danger-400: 225 29 72;
+  --danger-500: 244 63 94;
+  --danger-600: 251 113 133;
+  --danger-700: 253 164 175;
+  --danger-800: 254 205 211;
+  --danger-900: 255 228 230;
+  --danger-950: 255 241 242;
+  --error-50: 69 10 10;
+  --error-100: 127 29 29;
+  --error-200: 153 27 27;
+  --error-300: 185 28 28;
+  --error-400: 220 38 38;
+  --error-500: 239 68 68;
+  --error-600: 248 113 113;
+  --error-700: 252 165 165;
+  --error-800: 254 202 202;
+  --error-900: 254 226 226;
+  --error-950: 254 242 242;
+  --info-50: 8 47 73;
+  --info-100: 12 74 110;
+  --info-200: 7 89 133;
+  --info-300: 3 105 161;
+  --info-400: 2 132 199;
+  --info-500: 14 165 233;
+  --info-600: 56 189 248;
+  --info-700: 125 211 252;
+  --info-800: 186 230 253;
+  --info-900: 224 242 254;
+  --info-950: 240 249 255;
+  --ai-50: 46 16 101;
+  --ai-100: 76 29 149;
+  --ai-200: 91 33 182;
+  --ai-300: 109 40 217;
+  --ai-400: 124 58 237;
+  --ai-500: 139 92 246;
+  --ai-600: 167 139 250;
+  --ai-700: 196 181 253;
+  --ai-800: 221 214 254;
+  --ai-900: 237 233 254;
+  --ai-950: 245 243 255;
+  --cite-50: 30 27 75;
+  --cite-100: 49 46 129;
+  --cite-200: 55 48 163;
+  --cite-300: 67 56 202;
+  --cite-400: 79 70 229;
+  --cite-500: 99 102 241;
+  --cite-600: 129 140 248;
+  --cite-700: 165 180 252;
+  --cite-800: 199 210 254;
+  --cite-900: 224 231 255;
+  --cite-950: 238 242 255;
+}

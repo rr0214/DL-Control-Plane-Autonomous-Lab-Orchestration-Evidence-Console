@@ -90,28 +90,28 @@ export default function EvalsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900">How I evaluate this system</h2>
-        <p className="mt-1 text-sm text-slate-600">
+      <div className="rounded-xl bg-surface p-5 shadow-sm ring-1 ring-ink-200">
+        <h2 className="text-lg font-semibold text-ink-900">How I evaluate this system</h2>
+        <p className="mt-1 text-sm text-ink-600">
           I evaluate the whole system, not just the model: read real traces, find where it fails first, group the failures,
           then build the cheapest check for each.
         </p>
 
-        <div className="mt-4 hidden overflow-hidden rounded-lg ring-1 ring-slate-200 md:block">
+        <div className="mt-4 hidden overflow-hidden rounded-lg ring-1 ring-ink-200 md:block">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+            <thead className="bg-ink-50 text-xs uppercase tracking-wide text-ink-600">
               <tr>
                 <th className="px-3 py-2">Step</th>
                 <th className="px-3 py-2">Today</th>
                 <th className="px-3 py-2">Next</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-ink-200">
               {METHOD.map((m) => (
                 <tr key={m.step} className="align-top">
-                  <td className="px-3 py-3 font-semibold text-slate-900">{m.step}</td>
-                  <td className="px-3 py-3 text-slate-700">{m.today}</td>
-                  <td className="px-3 py-3 text-slate-700">{m.next}</td>
+                  <td className="px-3 py-3 font-semibold text-ink-900">{m.step}</td>
+                  <td className="px-3 py-3 text-ink-700">{m.today}</td>
+                  <td className="px-3 py-3 text-ink-700">{m.next}</td>
                 </tr>
               ))}
             </tbody>
@@ -120,14 +120,14 @@ export default function EvalsTab() {
 
         <ul className="mt-4 space-y-2 md:hidden">
           {METHOD.map((m) => (
-            <li key={m.step} className="rounded-lg border border-slate-200 p-3 text-sm">
-              <div className="font-semibold text-slate-900">{m.step}</div>
-              <p className="mt-1 text-slate-700">
-                <span className="font-medium text-slate-900">Today: </span>
+            <li key={m.step} className="rounded-lg border border-ink-200 p-3 text-sm">
+              <div className="font-semibold text-ink-900">{m.step}</div>
+              <p className="mt-1 text-ink-700">
+                <span className="font-medium text-ink-900">Today: </span>
                 {m.today}
               </p>
-              <p className="mt-1 text-slate-700">
-                <span className="font-medium text-slate-900">Next: </span>
+              <p className="mt-1 text-ink-700">
+                <span className="font-medium text-ink-900">Next: </span>
                 {m.next}
               </p>
             </li>
@@ -135,40 +135,40 @@ export default function EvalsTab() {
         </ul>
       </div>
 
-      <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Result: the review threshold</h2>
+      <div className="rounded-xl bg-surface p-5 shadow-sm ring-1 ring-ink-200">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Result: the review threshold</h2>
         {error && (
-          <p className="mt-3 text-sm text-rose-700">Could not load results. Start the API with ./start.sh and refresh.</p>
+          <p className="mt-3 text-sm text-danger-700">Could not load results. Start the API with ./start.sh and refresh.</p>
         )}
-        {!data && !error && <p className="mt-3 text-sm text-slate-500">Loading...</p>}
+        {!data && !error && <p className="mt-3 text-sm text-ink-500">Loading...</p>}
         {data && base && strict && (
           <>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {[base, strict].map((r) => (
-                <div key={r.threshold} className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
-                  <div className="text-xs text-slate-600">
+                <div key={r.threshold} className="rounded-lg bg-ink-50 p-4 ring-1 ring-ink-200">
+                  <div className="text-xs text-ink-600">
                     Review threshold {pct(r.threshold)}
                     {r === base ? " (current)" : " (stricter)"}
                   </div>
-                  <div className="mt-1 text-3xl font-semibold text-slate-900">
-                    {r.passed} of {r.total} <span className="text-base font-normal text-slate-600">pass</span>
+                  <div className="mt-1 text-3xl font-semibold text-ink-900">
+                    {r.passed} of {r.total} <span className="text-base font-normal text-ink-600">pass</span>
                   </div>
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-sm text-slate-700">
+            <p className="mt-3 text-sm text-ink-700">
               Tightening the threshold caught {caught.length} missed {caught.length === 1 ? "risk" : "risks"} but sent{" "}
               {flagged.length} safe {flagged.length === 1 ? "recipe" : "recipes"} to a scientist, so the threshold alone is
               not the fix.
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
               {caught.map((s) => (
-                <span key={s} className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800">
+                <span key={s} className="rounded-full bg-ok-100 px-2 py-0.5 font-medium text-ok-800">
                   caught: {s}
                 </span>
               ))}
               {flagged.map((s) => (
-                <span key={s} className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-900">
+                <span key={s} className="rounded-full bg-warn-100 px-2 py-0.5 font-medium text-warn-900">
                   over-flagged: {s}
                 </span>
               ))}
@@ -177,33 +177,33 @@ export default function EvalsTab() {
         )}
       </div>
 
-      <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900">Cost and latency per plan</h2>
-        <p className="mt-1 text-sm text-slate-600">
+      <div className="rounded-xl bg-surface p-5 shadow-sm ring-1 ring-ink-200">
+        <h2 className="text-lg font-semibold text-ink-900">Cost and latency per plan</h2>
+        <p className="mt-1 text-sm text-ink-600">
           Measured from real LLM calls only. A mock plan makes no calls and costs nothing.
         </p>
         {!usage || usage.real_plans === 0 ? (
-          <p className="mt-3 text-sm text-slate-600">
+          <p className="mt-3 text-sm text-ink-600">
             No real LLM plan yet ({usage?.mock_plans ?? 0} mock). Set an API key, then run Plan next batch in the Console tab.
           </p>
         ) : (
           <>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
-                <div className="text-xs text-slate-600">Average cost per plan ({usage.real_plans} real)</div>
-                <div className="mt-1 text-3xl font-semibold text-slate-900">
+              <div className="rounded-lg bg-ink-50 p-4 ring-1 ring-ink-200">
+                <div className="text-xs text-ink-600">Average cost per plan ({usage.real_plans} real)</div>
+                <div className="mt-1 text-3xl font-semibold text-ink-900">
                   {usage.avg_cost_usd === null ? "n/a" : `$${usage.avg_cost_usd.toFixed(4)}`}
                 </div>
               </div>
-              <div className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
-                <div className="text-xs text-slate-600">Average LLM time per plan</div>
-                <div className="mt-1 text-3xl font-semibold text-slate-900">
+              <div className="rounded-lg bg-ink-50 p-4 ring-1 ring-ink-200">
+                <div className="text-xs text-ink-600">Average LLM time per plan</div>
+                <div className="mt-1 text-3xl font-semibold text-ink-900">
                   {((usage.avg_latency_ms ?? 0) / 1000).toFixed(1)}s
                 </div>
               </div>
             </div>
             <table className="mt-3 w-full text-left text-xs">
-              <thead className="uppercase tracking-wide text-slate-500">
+              <thead className="uppercase tracking-wide text-ink-500">
                 <tr>
                   <th className="py-1 pr-3">Plan</th>
                   <th className="py-1 pr-3">Calls</th>
@@ -212,7 +212,7 @@ export default function EvalsTab() {
                   <th className="py-1">LLM time</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+              <tbody className="divide-y divide-ink-100 text-ink-700">
                 {usage.plans
                   .filter((p) => p.calls > 0)
                   .map((p) => (
@@ -230,10 +230,10 @@ export default function EvalsTab() {
             </table>
           </>
         )}
-        <p className="mt-3 text-[11px] text-amber-800">{usage?.price_note ?? "Prices are set by hand. Verify against current pricing."}</p>
+        <p className="mt-3 text-[11px] text-warn-800">{usage?.price_note ?? "Prices are set by hand. Verify against current pricing."}</p>
       </div>
 
-      <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
+      <div className="rounded-lg bg-warn-50 p-3 text-xs text-warn-900 ring-1 ring-warn-200">
         Seven illustrative cases, labeled by the builder, not a domain expert. This shows the method works end to end. Real
         evidence needs real traces and expert labels.
       </div>
@@ -242,7 +242,7 @@ export default function EvalsTab() {
         href={phoenixUrl}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+        className="inline-flex rounded-lg bg-ink-900 px-3 py-2 text-sm font-medium text-surface hover:bg-ink-700"
       >
         Open in Phoenix ↗
       </a>

@@ -59,6 +59,12 @@ services:
         value: "22"
       - key: NEXT_PUBLIC_API_URL
         value: https://sdl-api-rr.onrender.com
+      # The header's Phoenix traces link (baked in at build time): the full address of the sdl-control-plane project
+      # page in the hosted Phoenix, https://sdl-phoenix-rr.onrender.com/projects/<project id>. The ID only exists once
+      # Phoenix is live and has received a trace, so this starts empty (the link then goes to the Architecture page's
+      # Traces section). See DEPLOY.md.
+      - key: NEXT_PUBLIC_PHOENIX_URL
+        value: ""
 
   # Phoenix: the trace viewer and OTLP collector, from the prebuilt image (Render's runtime for a public
   # Docker image is "image"). Traces are kept on the persistent disk.
