@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { LoopStep, apiFetch } from "@/lib/api";
-import SystemDiagram, { SystemDiagramLegend } from "./SystemDiagram";
 
 type Status = LoopStep["status"];
 
@@ -39,53 +38,6 @@ function StatusTag({ status }: { status: Status }) {
 }
 
 // The 12 steps of one run, worded exactly like the flow diagram in README.md. Keep the two in sync.
-const FLOW: { n: string; name: string; tech: string; tag: string; type: LoopStep["type"]; simulated: boolean }[] = [
-  { n: "1", name: "Targets", tech: "Next.js form", tag: "REAL", type: "person", simulated: false },
-  { n: "2", name: "Target check", tech: "Python rules", tag: "REAL", type: "code", simulated: false },
-  { n: "3", name: "Setup agent", tech: "Claude, one answer tool", tag: "REAL", type: "LLM", simulated: false },
-  { n: "4", name: "Optimizer", tech: "fixed table via an MCP tool", tag: "SIMULATED", type: "ML", simulated: true },
-  { n: "5", name: "Prediction", tech: "Python lookup with no trained model", tag: "SIMULATED", type: "ML", simulated: true },
-  { n: "6", name: "Safety gate", tech: "Python policy kernel", tag: "REAL", type: "code", simulated: false },
-  { n: "7", name: "Scientist review", tech: "LangGraph pause where a person decides", tag: "REAL", type: "person", simulated: false },
-  { n: "8", name: "Make and test", tech: "Python simulator", tag: "SIMULATED", type: "code", simulated: true },
-  { n: "9", name: "Measure check", tech: "Python rules on simulated data", tag: "REAL code", type: "code", simulated: false },
-  { n: "10", name: "Diagnosis agent", tech: "Claude with a JSON reply", tag: "REAL", type: "LLM", simulated: false },
-  { n: "11", name: "Action gate", tech: "Python that fails closed to hold", tag: "REAL", type: "code", simulated: false },
-  { n: "12", name: "Release", tech: "FastAPI plus a receipt where a person signs off", tag: "REAL", type: "person", simulated: false },
-  { n: "", name: "Save and learn", tech: "SQLite history with no retraining", tag: "REAL", type: "code", simulated: false },
-];
-
-function FlowDiagram() {
-  return (
-    <ol className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-      {FLOW.map((s, i) => (
-        <li
-          key={s.name}
-          className={`relative rounded-lg border-2 p-3 ${TYPE_TONE[s.type]} ${
-            s.simulated ? "border-dashed border-ink-500" : "border-solid border-transparent"
-          }`}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <span className="text-sm font-semibold">
-              {s.n && <span className="mr-1 font-mono text-xs opacity-70">{s.n}</span>}
-              {s.name}
-            </span>
-            <span className="whitespace-nowrap rounded bg-surface/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
-              {s.tag}
-            </span>
-          </div>
-          <p className="mt-1 text-xs">{s.tech}</p>
-          {i < FLOW.length - 1 && (
-            <span aria-hidden className="absolute -right-2 top-1/2 hidden -translate-y-1/2 text-ink-400 lg:block">
-              ›
-            </span>
-          )}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 function Collapsible({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <details className="group rounded-xl bg-surface p-4 shadow-sm ring-1 ring-ink-200">
@@ -98,6 +50,7 @@ function Collapsible({ title, children }: { title: string; children: React.React
   );
 }
 
+// The detailed, folded part of the Architecture page: the step table read from the backend and short explainers.
 export default function ArchitectureTab() {
   const [mcpMode, setMcpMode] = useState<string | null>(null);
   // The steps come from the backend (app/steps.py), so this table cannot drift from the code.
@@ -123,34 +76,6 @@ export default function ArchitectureTab() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-surface p-5 shadow-sm ring-1 ring-ink-200">
-        <h2 className="text-lg font-semibold text-ink-900">System architecture</h2>
-        <p className="mt-1 text-sm text-ink-600">
-          What runs where, how the parts talk, and what is real. Dashed, hatched boxes are simulated or example data.
-        </p>
-        <div className="mt-4">
-          <SystemDiagram />
-        </div>
-        <SystemDiagramLegend />
-      </div>
-
-      <div className="rounded-xl bg-surface p-5 shadow-sm ring-1 ring-ink-200">
-        <h2 className="text-lg font-semibold text-ink-900">How a run works, step by step</h2>
-        <p className="mt-1 text-sm text-ink-600">
-          The AI proposes, plain code decides, and a human approves anything irreversible. Every step is recorded.
-        </p>
-
-        <FlowDiagram />
-
-        <p className="mt-3 text-xs text-ink-500">
-          Colors: green is a person, purple is an AI agent, yellow is math, gray is code. Dashed means simulated, not real. In step 3, code runs the literature lookup first, then Claude reads it and gives one answer.
-        </p>
-        <p className="mt-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-700 ring-1 ring-ink-200">
-          Under every step: LangGraph, SQLite checkpoints, FastAPI, Next.js, MCP tool gateway, Arize Phoenix traces through
-          OpenTelemetry, and code evals.
-        </p>
-      </div>
-
       <Collapsible title="Step details, read from the backend">
         {/* Wide screens: a table. */}
         <div className="mt-4 hidden overflow-hidden rounded-lg ring-1 ring-ink-200 md:block">
