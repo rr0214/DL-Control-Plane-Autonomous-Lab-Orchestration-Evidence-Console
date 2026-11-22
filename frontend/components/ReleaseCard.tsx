@@ -115,7 +115,7 @@ export default function ReleaseCard({ sampleId, role, onChange }: { sampleId: st
             maxLength={280}
             rows={2}
             placeholder={ev.needs_note ? "Reason (required to release)" : "Note (optional)"}
-            className="mt-2 w-full rounded-md border border-ink-300 p-2 text-sm"
+            className="mt-2 w-full rounded-md border border-ink-500 bg-page p-2 text-sm text-ink-900"
           />
           <div className="mt-2 flex gap-2">
             <button
