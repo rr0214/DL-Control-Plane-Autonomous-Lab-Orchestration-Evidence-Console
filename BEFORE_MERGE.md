@@ -5,10 +5,11 @@ first.
 
 ## Temporary items to remove
 
-1. **The theme query switch.** Delete `frontend/components/ThemePreview.tsx`, remove its import and `<ThemePreview />`
-   from `frontend/app/layout.tsx`. It lets `?theme=dark` or `?theme=light` in the URL override the theme, for
-   screenshots. The real theme switch in the header (saved in the browser) stays, and so does the small script in
-   `layout.tsx` that applies it before the first paint (that script is why `suppressHydrationWarning` is on `<html>`).
+1. **The theme query switch: removed.** `ThemePreview.tsx`, its import and its line in `frontend/app/layout.tsx` are
+   gone, so `?theme=` in the URL does nothing. The header switch stays: the default theme is light (`DEFAULT_THEME` in
+   `layout.tsx`), a first visit opens in light, and the switch to dark is remembered in the browser. The small script
+   in `layout.tsx` applies the saved choice before the first paint, which is why `suppressHydrationWarning` stays on
+   `<html>`.
 2. **Screens index and theme preview page.** None were added on this branch. If one is added later, list it here.
 3. **Anything else added only for testing.** Nothing in the repo: the screenshot and walkthrough tooling lives outside
    it. The `data-row` and `data-id` attributes on list rows and detail panels are used by that tooling; they are
