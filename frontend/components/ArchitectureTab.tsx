@@ -155,9 +155,9 @@ export default function ArchitectureTab() {
             </thead>
             <tbody className="divide-y divide-ink-200">
               {[
-                ["LLM input", "Goal and run history", "Plus literature, lab schedule and past scientist notes"],
+                ["LLM input", "Goal, customer targets, 5 curated references, run history with scientist notes", "Plus a live literature search and the lab schedule"],
                 ["LLM output", "Search space and cited directions", "Plus a rationale a scientist can read"],
-                ["Risk model", "Hard-coded lookup", "A trained model"],
+                ["Risk model", "Hard-coded rule with demo weights", "A trained model"],
                 ["Setup agent", "Real Claude call, one answer tool", "Real Claude call"],
                 ["Diagnosis agent", "Real Claude call with a JSON reply", "Real Claude call"],
                 ["Optimizer", "Simulated: a fixed table", "A real optimizer"],

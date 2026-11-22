@@ -4,7 +4,7 @@
 // Kept in sync by hand with backend/app/graph.py (node order) and backend/app/steps.py (real vs simulated).
 
 type Kind = "person" | "llm" | "ml" | "code" | "ext" | "store";
-type Truth = "real" | "sim" | "example" | "fallback";
+type Truth = "real" | "sim" | "example" | "fallback" | "mixed";
 
 const KIND: Record<Kind, { box: string; title: string }> = {
   person: { box: "fill-ok-50 stroke-ok-400", title: "fill-ok-900" },
@@ -20,6 +20,7 @@ const TRUTH: Record<Truth, { label: string; tag: string; text: string }> = {
   sim: { label: "SIMULATED", tag: "fill-danger-100 stroke-danger-300", text: "fill-danger-800" },
   example: { label: "EXAMPLE DATA", tag: "fill-warn-100 stroke-warn-300", text: "fill-warn-900" },
   fallback: { label: "REAL + MOCK FALLBACK", tag: "fill-info-100 stroke-info-300", text: "fill-info-900" },
+  mixed: { label: "LIVE + EXAMPLE DATA", tag: "fill-ok-100 stroke-ok-300", text: "fill-ok-800" },
 };
 
 function Box({
@@ -98,7 +99,7 @@ const IR = R2 + 20; // inner boxes inside those frames
 export default function SystemDiagram() {
   return (
     <div className="overflow-x-auto">
-      <svg viewBox="0 0 1300 712" className="min-w-[960px]" role="img" aria-labelledby="sysdiag-title sysdiag-desc">
+      <svg viewBox="0 0 1300 730" className="min-w-[960px]" role="img" aria-labelledby="sysdiag-title sysdiag-desc">
         <title id="sysdiag-title">System architecture of the SDL Control Plane</title>
         <desc id="sysdiag-desc">
           A Next.js console calls a FastAPI service over HTTPS. Inside it, a LangGraph graph of seven nodes runs in a fixed
@@ -115,15 +116,16 @@ export default function SystemDiagram() {
         </defs>
 
         {/* ---- Browser ---- */}
-        <Zone x={16} y={16} w={236} h={460} title="Browser: Next.js 15 console" sub="Render web service sdl-console" />
-        <Box x={30} y={66} w={208} h={66} kind="code" truth="example" title="Review queue" lines={["requests: example data", "recipes: live"]} />
+        <Zone x={16} y={16} w={236} h={540} title="Browser: Next.js 15 console" sub="Render web service sdl-console-rr" />
+        <Box x={30} y={66} w={208} h={66} kind="code" truth="mixed" title="Review queue" lines={["requests: seeded examples;", "Internal experiments:", "live + seeded"]} />
         <Box x={30} y={142} w={208} h={58} kind="code" truth="real" title="Add experiment" lines={["plan, review, results"]} />
-        <Box x={30} y={210} w={208} h={58} kind="code" truth="example" title="Active experiments" lines={["live runs and examples"]} />
+        <Box x={30} y={210} w={208} h={58} kind="code" truth="mixed" title="Active experiments" lines={["live runs + seeded examples"]} />
         <Box x={30} y={278} w={208} h={58} kind="code" truth="real" title="Architecture" lines={["step table from /api/loop"]} />
-        <Box x={30} y={346} w={208} h={80} kind="code" truth="real" title="PasswordGate + apiFetch" lines={["adds X-Access-Password", "and X-Role to every call;", "shows the 429 run-limit message"]} />
+        <Box x={30} y={436} w={208} h={92} kind="code" truth="real" title="Banner + header" lines={["banner: Claude live, or mocked", "if the newest run was mock;", "Phoenix traces link"]} />
+        <Box x={30} y={346} w={208} h={80} kind="code" truth="real" title="PasswordGate + apiFetch" lines={["adds X-Access-Password to every", "call; review and release calls", "also send X-Role"]} />
 
         {/* ---- API service ---- */}
-        <Zone x={286} y={16} w={734} h={684} title="API service: FastAPI + LangGraph (Python)" sub="Render web service sdl-api, 1 GB persistent disk" />
+        <Zone x={286} y={16} w={734} h={700} title="API service: FastAPI + LangGraph (Python)" sub="Render web service sdl-api-rr, 1 GB persistent disk" />
         <Box x={300} y={52} w={706} h={60} kind="code" truth="real" title="HTTP edge (api.py)"
           lines={["CORS allow-list · shared access password on every route but /health · daily plan-run limit (429)", "role check from the X-Role header: enforced on the server, but not real sign-in"]} />
 
@@ -157,7 +159,7 @@ export default function SystemDiagram() {
         <Wire pts={[[300, R1 + NH / 2], [COL[0], R1 + NH / 2]]} />
 
         <Box x={COL[0]} y={414} w={268} h={52} kind="person" truth="real" title="release.py: release check" lines={["compares results with customer targets"]} />
-        <Box x={COL[2]} y={414} w={268} h={52} kind="code" truth="real" title="history.py: save and learn" lines={["writes outcomes back for the next plan"]} />
+        <Box x={COL[2]} y={414} w={268} h={52} kind="code" truth="real" title="history.py: save and learn" lines={["outcomes saved in SQLite feed the next plan"]} />
         <Box x={COL[4]} y={414} w={NW} h={52} kind="code" truth="real" title="telemetry.py" lines={["OpenTelemetry spans"]} />
 
         <rect x={300} y={482} width={706} height={128} rx={8} className="fill-surface stroke-ink-300" strokeWidth={1} strokeDasharray="2 2" />
@@ -165,19 +167,19 @@ export default function SystemDiagram() {
         <text x={312} y={514} className="fill-ink-500 text-[10px]">If the MCP session fails, the same functions run directly; every trace records which way.</text>
         <Box x={312} y={528} w={220} h={70} kind="ml" truth="sim" title="propose_alloy_ratios" lines={["ratios from a fixed table", "(the optimizer step)"]} />
         <Box x={544} y={528} w={220} h={70} kind="code" truth="real" title="check_negative_runs" lines={["SQL lookup of failed runs", "with the same recipe"]} />
-        <Box x={776} y={528} w={218} h={70} kind="code" truth="real" title="search_calphad_literature" lines={["curated list of 6 papers,", "DOIs checked; local search"]} />
+        <Box x={776} y={528} w={218} h={70} kind="code" truth="real" title="search_calphad_literature" lines={["curated list of 5 papers,", "each with a DOI; local search"]} />
         <Wire dashed pts={[[586, 400], [586, 482]]} />
         <text x={594} y={476} className="fill-ink-600 text-[9.5px]">MCP calls from setup_agent, optimizer, policy_kernel</text>
 
-        <Box x={300} y={628} w={706} h={56} kind="code" truth="real" title="Routes"
-          lines={["/api/campaigns/plan · /api/samples/{id}/review · /api/samples/{id}/release · /api/loop · /api/demo/reset · /health (open)"]} />
+        <Box x={300} y={628} w={706} h={72} kind="code" truth="real" title="Routes"
+          lines={["POST /api/campaigns/plan · POST /api/samples/{id}/review · GET and POST /api/samples/{id}/release · POST /api/demo/reset", "GET /api/campaigns/{id} · /api/loop · /api/health · /api/usage/summary · /api/evals/summary · /health (open, no password)"]} />
 
         {/* ---- Data and outside services ---- */}
-        <Zone x={1054} y={16} w={230} h={684} title="Data and outside services" sub="" />
+        <Zone x={1054} y={16} w={230} h={700} title="Data and outside services" sub="" />
         <Box x={1068} y={52} w={202} h={92} kind="ext" truth="fallback" title="Anthropic API: Claude" lines={["called by setup_agent and", "diagnose_flagged; no key or", "an error: mock, labeled mock"]} />
         <Box x={1068} y={178} w={202} h={124} kind="store" truth="real" title="SQLite: sdl.db" lines={["campaigns, runs, plans,", "samples, actions, releases,", "run_counts (daily limit)", "on the persistent disk"]} />
         <Box x={1068} y={322} w={202} h={78} kind="store" truth="real" title="SQLite: checkpoints" lines={["LangGraph SqliteSaver:", "a paused run survives a restart"]} />
-        <Box x={1068} y={430} w={202} h={92} kind="ext" truth="real" title="Arize Phoenix" lines={["trace viewer and evals,", "Render web service", "sdl-phoenix (no password)"]} />
+        <Box x={1068} y={430} w={202} h={104} kind="ext" truth="real" title="Arize Phoenix" lines={["trace viewer; live runs go to", "project sdl-control-plane;", "sdl-phoenix-rr, no login yet;", "traces kept on its 1 GB disk"]} />
 
         {/* cross-zone wires */}
         <Wire pts={[[238, 92], [300, 92]]} label="HTTPS" at={[269, 86]} />
