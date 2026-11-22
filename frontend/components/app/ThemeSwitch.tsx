@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-// Light is the default. The choice is remembered in this browser (localStorage) and applied before the first paint by
-// the small script in app/layout.tsx, so the page does not flash.
+// Dark is the default (matching the customer prototype). The choice is remembered in this browser (localStorage) and
+// applied before the first paint by the small script in app/layout.tsx, so the page does not flash.
 export const THEME_KEY = "sdl-theme";
 
 export default function ThemeSwitch() {
