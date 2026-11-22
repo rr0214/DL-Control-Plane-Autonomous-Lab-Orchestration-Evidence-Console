@@ -1,129 +1,216 @@
 # SDL Control Plane
 
-A prototype console for a self-driving materials lab, where AI helps plan experiments, plain code enforces the safety rules, and a person approves the important steps.
+A real working prototype of a console for a self-driving materials lab. The pipeline of services, the safety gates and
+the Claude agents are real, and every run is traced. The optimizer, the prediction model and the lab measurements are
+simulated stand-ins that a real model or instrument can replace. The screens use example data, and each item is tagged
+LIVE (from the API) or EXAMPLE.
 
 **AI reads and explains, math predicts, code enforces, people approve.**
 
-## How one run works
+## What it does
 
-1. You enter targets like strength and temperature.
-2. Code checks the targets are possible and stops the run if not.
-3. An AI agent sets up the search.
-4. An optimizer picks a recipe (simulated).
-5. A prediction model scores it (simulated).
-6. A safety gate blocks banned elements like hafnium.
-7. A scientist reviews risky recipes.
-8. The lab makes and measures the sample (simulated).
-9. Code checks the measurements.
-10. An AI agent diagnoses problems and suggests a next action.
-11. A second code gate decides, and holds if anything is unclear.
-12. A person signs off on release and the result is saved.
+A scientist enters targets for a new alloy (strength, temperature, hafnium content). The system plans a batch of
+recipes, blocks anything that breaks a rule, pauses for a scientist on risky recipes, simulates making and measuring
+the samples, checks the readings, asks Claude to diagnose anything flagged, and lets a person release or withhold each
+sample, with a receipt that records the role that signed off.
 
-```mermaid
-flowchart TB
-  subgraph R1 [" "]
-    direction LR
-    S1["1 Targets<br/>Next.js form<br/>REAL"] --> S2["2 Target check<br/>Python rules<br/>REAL"] --> S3["3 Setup agent<br/>Claude, one answer tool<br/>REAL"] --> S4["4 Optimizer<br/>fixed table via an MCP tool<br/>SIMULATED"]
-  end
-  subgraph R2 [" "]
-    direction LR
-    S5["5 Prediction<br/>Python lookup with no trained model<br/>SIMULATED"] --> S6["6 Safety gate<br/>Python policy kernel<br/>REAL"] --> S7["7 Scientist review<br/>LangGraph pause where a person decides<br/>REAL"] --> S8["8 Make and test<br/>Python simulator<br/>SIMULATED"]
-  end
-  subgraph R3 [" "]
-    direction LR
-    S9["9 Measure check<br/>Python rules on simulated data<br/>REAL code"] --> S10["10 Diagnosis agent<br/>Claude with a JSON reply<br/>REAL"] --> S11["11 Action gate<br/>Python that fails closed to hold<br/>REAL"] --> S12["12 Release<br/>FastAPI plus a receipt where a person signs off<br/>REAL"] --> S13["Save and learn<br/>SQLite history with no retraining<br/>REAL"]
-  end
-  R1 --> R2 --> R3
+The console has four screens:
 
-  classDef person fill:#d1fae5,stroke:#047857,color:#064e3b
-  classDef ai fill:#ede9fe,stroke:#6d28d9,color:#3b0764
-  classDef math fill:#fef3c7,stroke:#b45309,color:#78350f,stroke-dasharray:6 4
-  classDef code fill:#e2e8f0,stroke:#334155,color:#0f172a
-  classDef codeSim fill:#e2e8f0,stroke:#334155,color:#0f172a,stroke-dasharray:6 4
-  class S1,S7,S12 person
-  class S3,S10 ai
-  class S4,S5 math
-  class S2,S6,S9,S11,S13 code
-  class S8 codeSim
-  style R1 fill:none,stroke:none
-  style R2 fill:none,stroke:none
-  style R3 fill:none,stroke:none
-```
+- **Review queue** (`/`): customer requests, internal experiments and recipes waiting for a scientist. Approving or
+  rejecting a live recipe resumes its paused run.
+- **Active experiments** (`/experiments`): planned, running, measuring, complete and stopped experiments.
+- **Add experiment** (`/experiments/new`): enter targets, run a real plan through the API, review it, and release a
+  sample. The run's evidence (references, tool calls, Claude calls with tokens and cost, spans) is shown with it.
+- **Architecture** (`/architecture`): where AI fits, the graph nodes, the steps read live from the backend, and how
+  traces work.
 
-Colors: green is a person, purple is an AI agent, yellow is math, gray is code. Dashed means simulated, not real. In step 3, code runs the literature lookup first, then Claude reads it and gives one answer.
+## How it is built
 
-## Real vs simulated
+- **Backend:** FastAPI and a LangGraph `StateGraph` (`backend/app/graph.py`). Every step is checkpointed in SQLite, so
+  a run paused for a scientist can wait as long as needed and resume where it stopped. Campaigns, plans, samples and
+  releases are stored in SQLite (`db.py`).
+- **Frontend:** Next.js (App Router), React and Tailwind. It calls the API in `frontend/lib/api.ts`.
+- **Tools:** an MCP tool gateway (FastMCP) with three tools.
+- **Tracing:** OpenTelemetry to Arize Phoenix.
+- **Hosting:** `render.yaml` defines three Render services, `sdl-api-rr`, `sdl-console-rr` and `sdl-phoenix-rr`
+  (see `DEPLOY.md`). When `SDL_ACCESS_PASSWORD` is set, every API route except `/health` needs that password, and the
+  console asks for it first. `SDL_DAILY_RUN_LIMIT` caps plan runs per UTC day.
 
-**Real:** the two AI agents (Claude), the safety gates, the checks, the review pauses and the traces.
+## The 7 graph nodes and the 10 console steps
 
-**Simulated:** the optimizer, the prediction model, the lab and the measurements.
+The graph has 7 nodes, run in a fixed order. If the target check fails, the run stops there.
 
-## Design decisions
+| Graph node | What it does |
+| --- | --- |
+| `target_check` | Plain code checks the targets against the lab limits and stops impossible ones. |
+| `setup_agent` | Claude reads the references and past runs and sets the search space. |
+| `optimizer` | Picks the ratios from a fixed table, through the `propose_alloy_ratios` MCP tool. |
+| `prediction_model` | Scores each recipe with a fixed lookup. There is no trained model. |
+| `policy_kernel` | The safety gate: blocks restricted elements and repeats of past runs. |
+| `triage_and_hitl` | Pauses risky recipes for a scientist, then simulates making and measuring, then checks the readings. |
+| `diagnose_flagged` | Claude proposes re-measure or hold for flagged samples; a code gate decides. |
 
-The one-line rule: **AI reads and explains, math predicts, code enforces, people approve.**
+The console shows 10 steps. Eight run on the graph nodes, and two run outside the graph:
 
-Each decision below is a call a product manager has to make for a system like this. For each one: what I chose, what I passed on, and the trade-off I accepted.
+| Console step | Where it runs |
+| --- | --- |
+| 1. Targets | `target_check` |
+| 2. Setup agent | `setup_agent` |
+| 3. Optimizer and prediction | `optimizer` and `prediction_model` |
+| 4. Safety gate | `policy_kernel` |
+| 5. Scientist review | `triage_and_hitl`: the graph pauses with `interrupt()` |
+| 6. Make and measure | `triage_and_hitl`: `workcell.py` and `measure.py` (simulated) |
+| 7. Measurement check | `triage_and_hitl`: `check.py` |
+| 8. Diagnosis | `diagnose_flagged`: Claude proposes, `action_gate.py` decides |
+| 9. Save and learn | Outside the graph: SQLite writes after each step; `history.py` feeds past outcomes into the next setup agent's prompt. No retraining. |
+| 10. Release | Outside the graph: the API route `POST /api/samples/{id}/release`, with rules in `release.py`. A person decides. |
 
-### 1. One setup agent, not two AI steps
-* **Chose:** one AI call per batch that reads the papers and past results and returns the search space.
-* **Passed on:** a separate literature lookup and setup agent (two AI steps, one of them a back-and-forth tool loop).
-* **Why:** it is one job (decide what is worth exploring), so one owner is easier to evaluate and explain.
-* **Trade-off:** lower cost and latency (one call, and the unchanging instructions are cached so repeat batches are cheaper). I gave up tuning or swapping the two roles separately.
+## Where Claude is used
 
-### 2. The AI draws the box, math picks the recipe
-* **Chose:** the AI sets which elements are allowed and a range for each. A numeric optimizer picks the exact percentages.
-* **Passed on:** letting the AI write full recipes.
-* **Why:** AI is good at judgment about what to explore and unreliable with precise numbers. An optimizer is testable, and the AI can never invent a recipe.
-* **Trade-off:** I need a real optimizer. Today it is simulated.
+Claude is used in exactly two places, both through the Anthropic API. The default model is `claude-sonnet-5-5`
+(`ANTHROPIC_MODEL`, or `SDL_MODEL_SETUP` and `SDL_MODEL_DIAGNOSIS` for each agent).
 
-### 3. Rules live in code, prompts are only context
-* **Chose:** "no hafnium" and "never repeat a failed run" are enforced by code: the AI's answer format does not allow hafnium, and the safety gate blocks it.
-* **Passed on:** relying on a line in the prompt.
-* **Why:** a prompt is a request the AI can miss. Code is a guarantee, it can be audited, and it does not change when the model changes.
-* **Trade-off:** changing a rule means changing code. In return the check is free and instant, with no AI call.
+- **Setup agent** (`setup_agent.py`): code first looks up the literature through the MCP tool, then Claude reads the
+  references and the run history and returns the search space through a single answer tool. The answer's element list
+  is an enum without the restricted element, so Claude cannot ask for hafnium.
+- **Diagnosis agent** (`diagnosis.py`): for each flagged sample, Claude replies in JSON with an action (re-measure or
+  hold), a cause and a reason. It only proposes; the action gate decides.
 
-### 4. The AI recommends, a gate decides
-* **Chose:** the diagnosis agent can only suggest "re-measure" or "hold". A separate code gate checks the suggestion and falls back to "hold" if anything looks off.
-* **Passed on:** letting the agent act on its own.
-* **Why:** it limits the damage if the AI is wrong. The worst case is a wasted suggestion.
-* **Trade-off:** safe but strict. When the agent's answer is not in a form the gate accepts, the gate holds the sample, so the AI call is paid for and not used. That is the next thing to fix.
+Both cache their fixed instructions, and every call is timed and priced (`llm_usage.py`). Scientist notes and past
+comments reach Claude as quoted data, never as instructions.
 
-### 5. A scientist approves before anything is made
-* **Chose:** risky recipes pause for a scientist before synthesis.
-* **Passed on:** reviewing after the scan, which is how an earlier version worked.
-* **Why:** making a sample costs real time and money and cannot be undone. Review after the fact is too late.
-* **Trade-off:** latency. A paused recipe can wait hours or days, but the workflow saves its place so waiting costs nothing. The review threshold is a dial: lower means fewer interruptions and more missed risks, higher means safer and more reviews. The evals show that tradeoff directly.
+**With no API key:** the app still runs end to end. The setup step becomes a plain lookup with no search space, so the
+optimizer uses only its fixed rows. Diagnosis uses a rule-based stand-in. Each such run is marked `mock`, and after a mock run the
+console's banner says Claude replies are mocked. The same fallback is used if a Claude call fails.
 
-### 6. Notes from people are data, never instructions
-* **Chose:** scientist notes and past comments are shown to the AI as quoted information only.
-* **Passed on:** letting notes steer the agent.
-* **Why:** anyone who can write a note could otherwise steer the system. This is protection against prompt injection (instructions hidden in data the AI reads).
-* **Trade-off:** a note can inform the agent but never command it. Hard limits sit in code, so even a fooled agent cannot break them.
+## The MCP tool gateway
 
-### 7. Plain-code checks first, an AI judge later
-* **Chose:** the first evaluators are rules written in code.
-* **Passed on:** using an AI to grade everything.
-* **Why:** code checks cost nothing, run instantly and give the same answer every time. An AI judge costs tokens, adds latency and can vary. I keep it for subjective calls.
-* **Trade-off:** code checks only catch what I thought to write down. The error analysis fills that gap.
+`mcp_server.py` defines three tools on a FastMCP server. The graph calls them through a gateway over an in-memory MCP
+session. If that session is unavailable, the gateway calls the same Python functions directly and records which path
+it used (`SDL_MCP_MODE=direct` forces the direct path).
 
-## What the tests found
+| Tool | Called by | What it does |
+| --- | --- | --- |
+| `propose_alloy_ratios` | the `optimizer` node | Returns ratios from the simulated optimizer's fixed table. |
+| `check_negative_runs` | the `policy_kernel` node | Looks for an earlier run with the same composition and processing. |
+| `search_calphad_literature` | the setup agent | Searches the 5 curated papers in `literature.json`. Search is local, not live. |
 
-* 20 test cases ran through the loop, each traced in Phoenix.
-* Two checks pass on all 20: impossible targets get flagged, and banned elements get blocked before anything is made. (The banned element check has nothing to score on the 5 runs that stop at the target check.)
-* 9 deliberate mistakes were planted to prove the checks fail when they should. All 9 were caught.
-* The diagnosis agent's reply is cut off at the 400 token limit in 10 of 11 cases, so the gate holds the sample. The likely fix is a higher token limit.
-* Scientist review only fired on a planted test sample and never on the optimizer's own pick. A unit test covers the pick, but the traces do not.
-* The results were labeled by me, not a scientist.
+Because the optimizer sits behind a tool, a real optimizer can replace the mock without changing the setup agent, as
+long as it keeps the tool's inputs and outputs.
 
-## Run it
+## The safety gates and where a person decides
+
+Code enforces the rules; prompts are only context.
+
+- **Target check** (`target_check.py`): targets outside the lab limits stop the run before any AI call.
+- **Safety gate** (`policy_kernel.py`, no AI): blocks any recipe with a restricted element (`RESTRICTED_ELEMENT`,
+  hafnium) and any repeat of a past run's composition and processing (`DUPLICATE_CONDITION`). Every batch includes two
+  fixed probes, a hafnium recipe and an exact repeat of a past run, so both rules are exercised on every run
+  (`proposer.py`).
+- **Scientist review** (`presynthesis.py`): a recipe whose predicted ductility margin is below 0.80, or that contains a
+  restricted element, pauses the graph before anything is made. **A person approves or rejects it**; a rejected recipe
+  is never made.
+- **Action gate** (`action_gate.py`): fails closed. The only actions are re-measure and hold; anything malformed or not
+  allowed becomes hold. A Red sample can only be held, and a sample can be re-measured at most twice.
+- **Release** (`release.py`): **a person releases or withholds each sample.** A Red sample can never be released, and
+  releasing with an exception needs a written reason of at least 10 characters. Each accepted decision is saved with a
+  receipt.
+
+## What is simulated
+
+- **Optimizer:** a fixed table of ratios (`optimizer.py`).
+- **Prediction model:** a fixed lookup with no trained model (`prediction_model.py`).
+- **Making and measuring:** `workcell.py` and `measure.py` simulate synthesis and the readings. Measured values in the
+  console are labeled simulated.
+- **Example data on the screens:** the customer requests, internal experiments and example recipes in
+  `frontend/lib/seed/` are made up and tagged EXAMPLE. Runs you start in Add experiment are real API runs and are
+  tagged LIVE.
+
+## Traces in Arize Phoenix
+
+Every plan, review and release is traced with OpenTelemetry and sent to Arize Phoenix over OTLP/HTTP (`telemetry.py`).
+A plan's trace has a span for each graph node, plus spans for the MCP tool calls, the Claude calls (with tokens, cost and
+latency), the safety gate, the scientist review, the measurement check, the action gate and the release sign-off. Live
+runs go to the Phoenix project `sdl-control-plane`. If Phoenix cannot be reached when the API starts, the app runs
+without tracing.
+
+The hosted Phoenix requires a login, and the API sends its traces with a Phoenix API key. **A read-only login is
+available on request.** The local Phoenix started by `start.sh` is open. Traces include prompts and Claude's replies,
+so only example data is sent there.
+
+## Run it locally
 
 ```bash
 ./start.sh
 ```
 
-Then open http://localhost:3000. The API docs are at http://localhost:8000/docs and the trace viewer (Arize Phoenix) is at http://localhost:6006. Needs Python 3.11 or newer and Node.js 18 or newer. The first start takes a few minutes.
+Then open http://localhost:3000. The API docs are at http://localhost:8000/docs and Phoenix is at
+http://localhost:6006. You need Python 3 (the backend is run on 3.12) and Node.js with npm (Next.js 15 needs Node.js
+18.18 or newer). The first start installs the dependencies and takes a few minutes.
 
-Add your ANTHROPIC_API_KEY to .env. The setup and diagnosis agents call Claude.
+`start.sh` creates `.env` from `.env.example` if it is missing. Add your `ANTHROPIC_API_KEY` there for live Claude
+calls; without it the app runs in mock mode (see above).
+
+Tests: `cd backend && .venv/bin/python -m pytest -q`.
+
+## Design decisions
+
+### 1. One setup agent, not two AI steps
+* **Chose:** one AI call per batch that reads the papers and past results and returns the search space.
+* **Passed on:** a separate literature agent and setup agent.
+* **Why:** it is one job (decide what is worth exploring), so one owner is easier to evaluate and explain.
+* **Trade-off:** lower cost and latency, and the fixed instructions are cached. I gave up tuning the two roles
+  separately.
+
+### 2. The AI draws the box, math picks the recipe
+* **Chose:** the AI sets which elements are allowed and a range for each. The optimizer picks the exact ratios.
+* **Passed on:** letting the AI write full recipes.
+* **Why:** AI is good at judgment about what to explore and unreliable with precise numbers. An optimizer is testable,
+  and the AI can never invent a recipe.
+* **Trade-off:** it needs a real optimizer. Today it is simulated.
+
+### 3. Rules live in code, prompts are only context
+* **Chose:** "no hafnium" and "never repeat a past run" are enforced by code: the answer format leaves hafnium out, and
+  the safety gate blocks it.
+* **Passed on:** relying on a line in the prompt.
+* **Why:** a prompt is a request the AI can miss. Code is a guarantee, can be audited, and does not change when the
+  model changes.
+* **Trade-off:** changing a rule means changing code. In return the check is free and instant.
+
+### 4. The AI recommends, a gate decides
+* **Chose:** the diagnosis agent can only suggest re-measure or hold. A code gate checks the suggestion and falls back to
+  hold if anything looks off.
+* **Passed on:** letting the agent act on its own.
+* **Why:** the worst case of a wrong answer is a wasted suggestion.
+* **Trade-off:** strict. When the reply is not in a form the gate accepts, the sample is held and the AI call is wasted.
+
+### 5. A scientist approves before anything is made
+* **Chose:** risky recipes pause for a scientist before synthesis.
+* **Passed on:** reviewing after the measurement.
+* **Why:** making a sample costs real time and money and cannot be undone.
+* **Trade-off:** latency. A paused run can wait hours or days, but the checkpoint keeps its place. The review threshold
+  is a dial: lower means fewer interruptions and more missed risks.
+
+### 6. Notes from people are data, never instructions
+* **Chose:** scientist notes and past comments reach the AI as quoted data only.
+* **Why:** otherwise anyone who can write a note could steer the system (prompt injection).
+* **Trade-off:** a note can inform the agent but never command it. Hard limits sit in code, so even a fooled agent
+  cannot break them.
+
+### 7. Plain-code checks first, an AI judge later
+* **Chose:** the first evaluators are rules written in code.
+* **Why:** they cost nothing, run instantly and give the same answer every time.
+* **Trade-off:** they only catch what I thought to write down.
+
+## Evals
+
+- `front_half_cases.py` builds 20 test cases: 5 with impossible targets, 5 that force a hafnium pick and 10 clean ones.
+  `golden.json` holds their expected answers.
+- `front_half_evals.py` scores two code checks on the traces: impossible targets are flagged and stop the run, and
+  hafnium is blocked before anything is made.
+- To prove the checks can fail, it plants 9 mistakes in copies of real traces. Each must come out Fail.
+- Known issue: the diagnosis agent's reply is capped at 400 tokens (`diagnosis.py`). In a live test run the reply hit
+  that cap and the JSON was cut off, so the action gate held the sample. Raising the cap is the likely fix.
 
 ## Repo layout
 
@@ -131,55 +218,46 @@ Add your ANTHROPIC_API_KEY to .env. The setup and diagnosis agents call Claude.
 backend/app/
   api.py                 FastAPI routes the console calls
   orchestrator.py        Starts a run and resumes it after a scientist review
-  graph.py               The LangGraph workflow that runs the steps in order
-  target_check.py        Step 2: stops the run on impossible targets
+  graph.py               The LangGraph workflow (7 nodes)
+  target_check.py        Lab limits; stops impossible targets
   targets.py             Customer targets for a campaign
-  setup_agent.py         Step 3: Claude sets up the search space
-  history.py             What earlier runs feed back to the setup agent
-  optimizer.py           Step 4: simulated optimizer (a fixed table)
-  prediction_model.py    Step 5: simulated prediction model (a fixed lookup)
+  setup_agent.py         Claude sets the search space
+  history.py             Past outcomes fed to the setup agent
+  optimizer.py           Simulated optimizer (a fixed table)
+  prediction_model.py    Simulated prediction model (a fixed lookup)
   proposer.py            Gathers the candidates for the safety gate
-  policy_kernel.py       Step 6: safety gate (banned elements, repeated failures)
-  presynthesis.py        Step 7: decides which recipes a scientist must review
-  measure.py             Step 8: simulated measurements
-  workcell.py            Step 8: simulated lab readings
-  check.py               Step 9: measurement check
-  diagnosis.py           Step 10: diagnosis agent (Claude)
-  action_gate.py         Step 11: action gate (holds when unclear)
-  release.py             Step 12: release check and sign off
-  steps.py               The loop definition the UI and traces read from
-  mcp_server.py          MCP tools: optimizer, failed run lookup, literature search
-  literature.json        The curated papers the setup agent can cite
-  chemistry.py           Reads and normalizes compositions
-  db.py                  SQLite storage for campaigns, plans and samples
-  config.py              Settings read from .env
+  policy_kernel.py       Safety gate (restricted elements, repeated runs)
+  presynthesis.py        Decides which recipes a scientist must review
+  workcell.py            Simulated lab readings
+  measure.py             Simulated measurements
+  check.py               Measurement check
+  diagnosis.py           Diagnosis agent (Claude)
+  action_gate.py         Action gate (holds when unclear)
+  release.py             Release rules and receipt
+  steps.py               The step table the Architecture page reads
+  mcp_server.py          MCP tools and the gateway
+  literature.json        The 5 curated papers
   llm_usage.py           Times and prices every Claude call
   telemetry.py           Phoenix tracing through OpenTelemetry
-  front_half_cases.py    Builds the 20 test cases
-  front_half_runner.py   Runs the 20 cases with tracing on
-  front_half_evals.py    The two code checks, scored on the traces
+  db.py, config.py       SQLite storage and settings
+  front_half_*.py        The 20 test cases, the runner and the evals
   run_evals.py           Earlier evals and the review threshold comparison
-  promote_overrides.py   Turns scientist overrides into a labeling dataset
-  synth_cases.py         Generator for an earlier batch of test cases
-  seed_camp014.py        Demo campaign data
-  seed_phoenix.py        Demo traces for Phoenix
-backend/data/front_half/
-  cases.json, golden.json    The 20 cases and their expected answers
-backend/tests/           pytest suite, one file per area (test_front_half.py covers the new checks)
-frontend/app/page.tsx    The page and its tabs
+  seed_phoenix.py        Six curated example traces for Phoenix
+backend/tests/           pytest suite
+frontend/app/            Routes: / (Review queue), /experiments, /experiments/new, /architecture
 frontend/components/
-  ConsoleTab.tsx         Lab Control Console: run a batch, review, release
-  LoopStrip.tsx          The loop at a glance
-  ReleaseCard.tsx        Release sign off card
-  ArchitectureTab.tsx    System Architecture tab
-  EvalsTab.tsx           Evals tab (hidden for now)
-frontend/lib/api.ts      Types and calls for the backend API
+  app/                   Header, banner, theme switch, tags
+  review/                Review queue
+  experiments/           Active experiments
+  addexp/                Add experiment and its evidence panel
+  architecture/          Architecture page sections
+frontend/lib/            API calls, stores, loop steps, example data (seed/)
+render.yaml, DEPLOY.md   Render hosting
 start.sh                 Starts Phoenix, the API and the console
 ```
 
 ## Next
 
-* Fix the diagnosis token limit.
-* Add a third check that the diagnosis reply is read correctly.
-* Review only when confidence is low, rolled out in stages.
-* Replace the simulated parts with real ones.
+* Raise the diagnosis token limit.
+* Send the Goal typed in Add experiment to the planner (today the planner uses the campaign's fixed goal).
+* Replace the simulated optimizer, prediction model and instruments with real ones.
