@@ -7,6 +7,7 @@ import EvidenceInfo from "@/components/app/EvidenceInfo";
 import SourceTag from "@/components/app/SourceTag";
 import EvidenceLabel from "@/components/EvidenceLabel";
 import ReleaseCard from "@/components/ReleaseCard";
+import { LLM_MODE_EVENT } from "@/components/app/PrototypeBanner";
 import FlowBar from "./FlowBar";
 import TargetsCard from "./TargetsCard";
 import { ActionsLog, Fold, LiteratureList, Lineage, Receipts, SetupOutput, SpanInspector } from "./Evidence";
@@ -166,6 +167,7 @@ export default function AddExperiment() {
       savePlan(next);
       setPlan(next);
       setNote("");
+      window.dispatchEvent(new CustomEvent(LLM_MODE_EVENT, { detail: next.llm_mode })); // banner: mocked or Claude
       await reloadCampaign();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
