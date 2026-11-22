@@ -11,6 +11,9 @@ export type CustomerRequest = {
   avoid: string[]; // materials the customer does not want in the recipe
   note: string;
   expectedCheck: LabCheckStatus; // what labCheck() should return; kept so the rules can be re-checked, not shown
+  intake: { question: string; answer: string }[]; // what the customer told the intake bot, shown folded
+  reply?: { at: string; text: string }; // the customer answered after an adjustment: the request moves to the top
+  start?: { status: "accepted" } | { status: "rejected"; reason: string; note: string; at: string }; // a decided example
 };
 
 export const CUSTOMER_REQUESTS: CustomerRequest[] = [
@@ -23,6 +26,7 @@ export const CUSTOMER_REQUESTS: CustomerRequest[] = [
     avoid: ["Cobalt", "Beryllium"],
     note: "Blade root fixture for a land turbine.",
     expectedCheck: "ready",
+    intake: [{ question: "What is the part?", answer: "A blade root fixture for a land turbine." }, { question: "How many do you need?", answer: "Twelve coupons for a first test." }],
   },
   {
     id: "REQ-1042",
@@ -33,6 +37,7 @@ export const CUSTOMER_REQUESTS: CustomerRequest[] = [
     avoid: ["Nickel"],
     note: "Nozzle insert. Temperature is the hard requirement.",
     expectedCheck: "change",
+    intake: [{ question: "What is the part?", answer: "A nozzle insert." }, { question: "Which target matters most?", answer: "Temperature. We can give a little on strength." }],
   },
   {
     id: "REQ-1043",
@@ -43,6 +48,7 @@ export const CUSTOMER_REQUESTS: CustomerRequest[] = [
     avoid: ["Lead", "Cadmium"],
     note: "Burner liner, continuous duty.",
     expectedCheck: "cannot",
+    intake: [{ question: "What is the part?", answer: "A burner liner on continuous duty." }, { question: "Is 2400 °C firm?", answer: "Yes, that is the peak in service." }],
   },
   {
     id: "REQ-1044",
@@ -53,6 +59,8 @@ export const CUSTOMER_REQUESTS: CustomerRequest[] = [
     avoid: ["Cobalt"],
     note: "Gripper finger for a high-load arm.",
     expectedCheck: "change",
+    intake: [{ question: "What is the part?", answer: "A gripper finger for a high-load arm." }, { question: "Is the strength target firm?", answer: "We would accept a little less if wear is good." }],
+    reply: { at: "2026-11-21T09:30:00Z", text: "We can live with 1899 MPa if the wear test looks good. Please go ahead." },
   },
   {
     id: "REQ-1045",
@@ -63,6 +71,7 @@ export const CUSTOMER_REQUESTS: CustomerRequest[] = [
     avoid: ["Copper"],
     note: "Valve seat. Open to small hafnium additions.",
     expectedCheck: "ready",
+    intake: [{ question: "What is the part?", answer: "A valve seat." }, { question: "Can the recipe contain hafnium?", answer: "Small additions are fine, but not required." }],
   },
   {
     id: "REQ-1046",
@@ -73,6 +82,8 @@ export const CUSTOMER_REQUESTS: CustomerRequest[] = [
     avoid: ["Tungsten"],
     note: "Forging die insert.",
     expectedCheck: "cannot",
+    intake: [{ question: "What is the part?", answer: "A forging die insert." }, { question: "Is 2300 MPa firm?", answer: "Yes." }],
+    start: { status: "rejected", reason: "Over lab limit", note: "2300 MPa is above what this lab can reach (2000 MPa). We can quote up to 1899 MPa.", at: "2026-11-19T10:05:00Z" },
   },
   {
     id: "REQ-1047",
@@ -83,6 +94,8 @@ export const CUSTOMER_REQUESTS: CustomerRequest[] = [
     avoid: [],
     note: "Short run of fixture blocks.",
     expectedCheck: "ready",
+    intake: [{ question: "What is the part?", answer: "A short run of fixture blocks." }, { question: "When do you need them?", answer: "Within a month." }],
+    start: { status: "accepted" },
   },
   {
     id: "REQ-1048",
@@ -93,5 +106,6 @@ export const CUSTOMER_REQUESTS: CustomerRequest[] = [
     avoid: ["Beryllium"],
     note: "Thruster throat, both limits pushed.",
     expectedCheck: "cannot",
+    intake: [{ question: "What is the part?", answer: "A thruster throat." }, { question: "Are both limits firm?", answer: "Yes, both." }],
   },
 ];

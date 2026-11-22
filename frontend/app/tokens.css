@@ -21,7 +21,7 @@
   --panel: 245 246 245; /* #f5f6f5 cards */
   --panel-inner: 236 238 237; /* #eceeed panels inside cards */
   --border: 217 220 218; /* #d9dcda borders and dividers */
-  --muted: 93 99 96; /* #5d6360 secondary text */
+  --muted: 79 85 82; /* #4f5552 secondary text */
   --warning: 138 90 0; /* #8a5a00 warning text, for example the Example data banner */
 
   /* ---- Surfaces ---- */
@@ -32,8 +32,8 @@
   --ink-100: 236 238 237;
   --ink-200: 217 220 218;
   --ink-300: 180 185 182;
-  --ink-400: 93 99 96;
-  --ink-500: 93 99 96;
+  --ink-400: 79 85 82;
+  --ink-500: 79 85 82;
   --ink-600: 71 76 74;
   --ink-700: 46 50 48;
   --ink-800: 26 28 27;
