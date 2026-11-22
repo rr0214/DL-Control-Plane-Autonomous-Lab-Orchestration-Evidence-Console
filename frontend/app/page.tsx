@@ -1,115 +1,12 @@
-"use client";
+import AppHeader from "@/components/app/AppHeader";
+import ReviewQueue from "@/components/review/ReviewQueue";
 
-import { useCallback, useEffect, useState } from "react";
-import ArchitectureTab from "@/components/ArchitectureTab";
-import ConsoleTab from "@/components/ConsoleTab";
-import CustomerQueueTab from "@/components/CustomerQueueTab";
-import InternalExperimentsTab from "@/components/InternalExperimentsTab";
-// Evals tab hidden for now. To bring it back, uncomment this import, its TABS entry and its render line below.
-// import EvalsTab from "@/components/EvalsTab";
-import { API, CampaignView, apiFetch } from "@/lib/api";
-
-const TABS = [
-  { id: "console", label: "Lab Control Console" },
-  { id: "architecture", label: "System Architecture" },
-  { id: "queue", label: "Customer queue" }, // example data only
-  { id: "experiments", label: "Internal experiments" }, // example data only
-  // { id: "evals", label: "Evals (Error Analysis)" },  // hidden for now
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
-
-export default function Home() {
-  const [tab, setTab] = useState<TabId>("console");
-  const [campaign, setCampaign] = useState<CampaignView | null>(null);
-  const [backendError, setBackendError] = useState<string | null>(null);
-  const [resetKey, setResetKey] = useState(0);
-  const [resetting, setResetting] = useState(false);
-  const [resetNote, setResetNote] = useState<string | null>(null);
-
-  const loadCampaign = useCallback(async () => {
-    try {
-      const res = await apiFetch(`/api/campaigns/CAMP-014`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`Backend returned ${res.status}`);
-      setCampaign(await res.json());
-      setBackendError(null);
-    } catch {
-      setBackendError(`Cannot reach the API at ${API}. Start it with ./start.sh.`);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadCampaign();
-  }, [loadCampaign]);
-
-  async function resetDemo() {
-    const ok = window.confirm(
-      "Reset CAMP-014? This clears its plans, samples, and LangGraph checkpoints. Seed runs (Run-071, Run-088) stay."
-    );
-    if (!ok) return;
-    setResetting(true);
-    setResetNote(null);
-    try {
-      const res = await apiFetch(`/api/demo/reset?campaign_id=CAMP-014`, {
-        method: "POST",
-        headers: { "X-Role": "Scientist (PI)" },
-      });
-      if (!res.ok) throw new Error(`${res.status}`);
-      setResetKey((k) => k + 1); // remounts the console so no stale plan stays on screen
-      await loadCampaign();
-      setResetNote("Demo reset. CAMP-014 is back to its seed state.");
-    } catch {
-      setResetNote("Reset failed. Check that the API is running.");
-    } finally {
-      setResetting(false);
-    }
-  }
-
+// Review queue: customer requests (EXAMPLE) and recipes held for a scientist (LIVE and EXAMPLE) in one list.
+export default function ReviewQueuePage() {
   return (
-    <main className="mx-auto max-w-7xl px-4 py-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">SDL Control Plane</h1>
-            <span className="rounded-full bg-ink-900 px-2 py-0.5 text-xs font-medium text-surface">Internal</span>
-          </div>
-          <p className="text-sm text-ink-600">Autonomous Lab Orchestration &amp; Evidence Console</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {resetNote && <span className="text-xs text-ink-600">{resetNote}</span>}
-          <button
-            onClick={resetDemo}
-            disabled={resetting}
-            className="rounded-lg bg-surface px-3 py-2 text-sm font-medium text-ink-800 shadow-sm ring-1 ring-ink-500 hover:bg-ink-50 disabled:opacity-50"
-          >
-            {resetting ? "Resetting..." : "Reset Demo"}
-          </button>
-        </div>
-      </header>
-
-      <nav className="mb-6 flex flex-wrap gap-1 rounded-lg bg-surface p-1 shadow-sm ring-1 ring-ink-200">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`min-w-[8rem] flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
-              tab === t.id ? "bg-accent text-on-accent" : "text-ink-600 hover:bg-ink-100"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-
-      {backendError && (
-        <div className="mb-4 rounded-lg bg-danger-50 p-3 text-sm text-danger-800 ring-1 ring-danger-200">{backendError}</div>
-      )}
-
-      {tab === "console" && <ConsoleTab key={resetKey} campaign={campaign} onChange={loadCampaign} />}
-      {tab === "architecture" && <ArchitectureTab />}
-      {tab === "queue" && <CustomerQueueTab />}
-      {tab === "experiments" && <InternalExperimentsTab />}
-      {/* {tab === "evals" && <EvalsTab />}  hidden for now */}
+    <main className="mx-auto max-w-7xl px-4 py-5">
+      <AppHeader />
+      <ReviewQueue />
     </main>
   );
 }

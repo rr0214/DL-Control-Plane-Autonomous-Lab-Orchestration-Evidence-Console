@@ -21,6 +21,9 @@ export const STATUS_LABEL: Record<ReviewStatus, string> = {
   rejected: "Rejected",
 };
 
+// Status chip colors: Needs review amber, Accepted green, Rejected red.
+export const STATUS_TONE: Record<ReviewStatus, "warn" | "ok" | "danger"> = { needs_review: "warn", accepted: "ok", rejected: "danger" };
+
 export type HistoryLine = { from: ReviewStatus | null; to: ReviewStatus; by: string; at: string; detail?: string };
 
 export type RequestState = {
