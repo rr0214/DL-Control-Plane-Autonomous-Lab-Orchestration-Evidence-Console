@@ -85,7 +85,7 @@ export default function ReviewQueue() {
             <select value={type} onChange={(e) => setType(e.target.value as TypeFilter)} className={SELECT}>
               <option value="all">All types</option>
               <option value="request">Customer requests</option>
-              <option value="recipe">Recipes</option>
+              <option value="recipe">Internal experiments</option>
             </select>
           </label>
           <label className="flex items-center gap-1 text-xs text-ink-700">
@@ -129,14 +129,16 @@ export default function ReviewQueue() {
                       <span className={`min-w-0 font-medium text-ink-900 ${row.kind === "request" ? "" : "font-mono text-sm"}`}>
                         {row.kind === "request" ? row.r.customer : row.kind === "example-recipe" ? row.x.composition : row.s.composition}
                       </span>
-                      <Chip tone="ink">{row.kind === "request" ? "Customer request" : "Recipe"}</Chip>
+                      <Chip tone="ink">{row.kind === "request" ? "Customer request" : "Internal experiment"}</Chip>
                       <Chip tone={STATUS_TONE[row.status]}>{STATUS_LABEL[row.status]}</Chip>
                       {row.kind === "request" && row.replied && <Chip tone="info">Customer replied</Chip>}
                       {row.kind === "request" && row.waitingCustomer && <Chip tone="ink">Waiting for customer</Chip>}
                       <SourceTag kind={row.kind === "live-recipe" ? "live" : "example"} />
                     </div>
                     <div className="mt-0.5 text-xs text-ink-600">
-                      {row.kind === "request" ? row.r.id : row.kind === "example-recipe" ? row.x.id : row.s.sample_id} ·{" "}
+                      {/* The run's experiment ID when there is one (LIVE recipes, same ID as Active experiments); example
+                          recipes are not part of a run, so they keep their recipe ID. */}
+                      {row.kind === "request" ? row.r.id : row.kind === "example-recipe" ? row.x.id : row.thread} ·{" "}
                       {row.status === "needs_review" ? waitingDays(row.date, now) || `Since ${formatDay(row.date)}` : formatDay(row.date)}
                     </div>
                   </button>
