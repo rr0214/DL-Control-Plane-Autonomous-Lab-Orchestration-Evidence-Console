@@ -17,7 +17,10 @@ first.
 
 ## Decisions still open (flagged, not changed)
 
-4. **Phoenix has no password.** Anyone with the Phoenix URL can read traces, including prompts and replies.
+4. **Phoenix login.** The hosted Phoenix requires a login: Phoenix 21 turns it on for a public host and `render.yaml`
+   sets `PHOENIX_ENABLE_AUTH=true`. Still to do in the dashboard: `PHOENIX_SECRET`,
+   `PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD` (until set, the admin password is the default `admin`), and
+   `PHOENIX_API_KEY` on `sdl-api-rr` so traces are accepted. The local Phoenix (start.sh) is open.
 5. **Real Radical logo and brand assets.** The header uses a text wordmark ("Radical"); no logo is drawn or copied.
    The history lines name R. Riggs as an example scientist (example data, not a real account).
 6. **Lab check rules**, including the 5% near-limit margin (`frontend/lib/labCheck.ts`, `LAB_LIMITS`).
@@ -55,8 +58,8 @@ first.
     that page in a new tab with the hover note "Read-only login, ask for access"; when it is empty, the link goes to the
     Traces section of the Architecture page. `render.yaml` starts it empty for the hosted console: set it after the
     first deploy (DEPLOY.md). **Recheck the project address after any Phoenix reset or redeploy:** the project ID comes
-    from Phoenix's database and changes if that is lost. The hover note is **not true yet**: Phoenix has no login
-    (item 4), so protect Phoenix or change `PHOENIX_TRACES_NOTE` in `lib/settings.ts` before sharing the link.
+    from Phoenix's database and changes if that is lost. The hover note becomes true once the Phoenix login
+    is configured and a Viewer account exists (item 4); until then, change `PHOENIX_TRACES_NOTE` in `lib/settings.ts`.
 
 ## Checks
 
