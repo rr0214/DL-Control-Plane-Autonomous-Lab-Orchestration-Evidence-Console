@@ -49,14 +49,18 @@ first.
     tool through the MCP gateway, falling back to a direct call if the session fails; the setup agent only supplies the
     search space; `prediction_model.score` is called directly. A replacement must keep the tool's inputs and outputs and
     the element and route lists that `setup_agent.py` imports from `optimizer.py`.)
+14. **Phoenix traces link in the header** (`NEXT_PUBLIC_PHOENIX_URL`, read when the console is built; unset means
+    `http://localhost:6006`, empty hides the link; `render.yaml` sets the hosted address on `sdl-console-rr`). Its
+    hover note says "Read-only login, ask for access", which is **not true yet**: Phoenix has no login (item 4).
+    Protect Phoenix, or change the note in `lib/settings.ts` (`PHOENIX_TRACES_NOTE`), before sharing the link.
 
 ## Checks
 
-11. **Backend tests pass:** `cd backend && .venv/bin/python -m pytest -q`.
-12. **Frontend type check and build pass:** `cd frontend && npx tsc --noEmit && npm run build`.
-13. **Backend unchanged by the branch:** `git diff --stat deploy...<branch> -- backend` prints nothing.
-14. **No secrets in any commit on the branch:** scan every commit in `deploy..<branch>` for keys and secret files
+15. **Backend tests pass:** `cd backend && .venv/bin/python -m pytest -q`.
+16. **Frontend type check and build pass:** `cd frontend && npx tsc --noEmit && npm run build`.
+17. **Backend unchanged by the branch:** `git diff --stat deploy...<branch> -- backend` prints nothing.
+18. **No secrets in any commit on the branch:** scan every commit in `deploy..<branch>` for keys and secret files
     (Anthropic, Firebase/Google, AWS, GitHub, private keys, `.env`), not just the final files.
-15. **Contrast:** text meets 4.5:1 and control borders 3:1 in both themes.
-16. **Screenshots of every screen** in both themes at desktop and phone width, reviewed and approved.
-17. **Example data stays labeled:** every item carries a LIVE or EXAMPLE tag, and the banner says Example data.
+19. **Contrast:** text meets 4.5:1 and control borders 3:1 in both themes.
+20. **Screenshots of every screen** in both themes at desktop and phone width, reviewed and approved.
+21. **Example data stays labeled:** every item carries a LIVE or EXAMPLE tag, and the banner says Example data.

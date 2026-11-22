@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeSwitch from "./ThemeSwitch";
+import { PHOENIX_TRACES_NOTE, PHOENIX_TRACES_URL } from "@/lib/settings";
 import { useStore } from "@/lib/store";
 
 // Header for every scientist screen: name, chips, Architecture link, theme switch, and the two tabs.
@@ -25,6 +26,21 @@ export default function AppHeader({ tabs = true }: { tabs?: boolean }) {
           <Link href="/architecture" className="text-sm font-medium text-ink-700 underline-offset-2 hover:underline">
             Architecture
           </Link>
+          {PHOENIX_TRACES_URL && (
+            <a
+              href={PHOENIX_TRACES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={PHOENIX_TRACES_NOTE}
+              className="text-sm font-medium text-ink-700 underline-offset-2 hover:underline"
+            >
+              Phoenix traces
+              <span className="sr-only">
+                {" "}
+                (opens in a new tab). {PHOENIX_TRACES_NOTE}.
+              </span>
+            </a>
+          )}
           <ThemeSwitch />
         </div>
       </div>

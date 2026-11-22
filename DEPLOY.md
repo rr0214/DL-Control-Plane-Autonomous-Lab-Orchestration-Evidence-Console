@@ -36,7 +36,10 @@ Render adds a short suffix when a name is already taken, for example `sdl-api-rr
 
 * Backend URL changed: update `NEXT_PUBLIC_API_URL` on `sdl-console-rr`, then click **Manual Deploy**, then **Deploy latest commit** (the console bakes this value in when it builds).
 * Console URL changed: update `SDL_ALLOWED_ORIGINS` on `sdl-api-rr`.
-* Phoenix URL changed: update `PHOENIX_COLLECTOR_ENDPOINT` and `PHOENIX_PUBLIC_URL` on `sdl-api-rr`.
+* Phoenix URL changed: update `PHOENIX_COLLECTOR_ENDPOINT` and `PHOENIX_PUBLIC_URL` on `sdl-api-rr`, and
+  `NEXT_PUBLIC_PHOENIX_URL` on `sdl-console-rr`, then **Manual Deploy**, **Deploy latest commit** on the console (the
+  header's **Phoenix traces** link is baked in when it builds). Set `NEXT_PUBLIC_PHOENIX_URL` to an empty value to
+  hide that link.
 
 ### If traces do not show up
 
@@ -66,4 +69,4 @@ Optional, free (no AI calls): `.venv/bin/python -m app.seed_phoenix` with the sa
 * **The shared password protects the API**, not the page itself. Every API route except `/health` needs it, including `/docs`.
 * **Daily run limit.** The backend accepts at most `SDL_DAILY_RUN_LIMIT` plan runs per day (25 in `render.yaml`), counted in UTC and reset at midnight UTC. Each run can call Claude, about $0.01 to $0.02, so 25 runs cost at most about $0.50 a day. After that, **Plan next batch** shows "Daily run limit reached" until the next day. Reviews and releases are not counted. To change it, edit `SDL_DAILY_RUN_LIMIT` on `sdl-api-rr` under **Environment** (0 turns the limit off). The count lives on the backend's disk, so restarts and **Reset Demo** do not clear it.
 * Secrets stay in the Render dashboard. They are never written to `render.yaml` or the repo.
-* Local use is unchanged. With no `SDL_ACCESS_PASSWORD`, `SDL_ALLOWED_ORIGINS`, `PHOENIX_PUBLIC_URL` or `SDL_DAILY_RUN_LIMIT` set, `./start.sh` works as before.
+* Local use is unchanged. With no `SDL_ACCESS_PASSWORD`, `SDL_ALLOWED_ORIGINS`, `PHOENIX_PUBLIC_URL` or `SDL_DAILY_RUN_LIMIT` set, `./start.sh` works as before. With no `NEXT_PUBLIC_PHOENIX_URL`, the header's **Phoenix traces** link points at the local Phoenix (`http://localhost:6006`).

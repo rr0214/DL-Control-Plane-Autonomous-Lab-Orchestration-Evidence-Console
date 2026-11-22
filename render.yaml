@@ -59,6 +59,9 @@ services:
         value: "22"
       - key: NEXT_PUBLIC_API_URL
         value: https://sdl-api-rr.onrender.com
+      # The header's Phoenix traces link (baked in at build time). Empty hides the link.
+      - key: NEXT_PUBLIC_PHOENIX_URL
+        value: https://sdl-phoenix-rr.onrender.com
 
   # Phoenix: the trace viewer and OTLP collector, from the prebuilt image (Render's runtime for a public
   # Docker image is "image"). Traces are kept on the persistent disk.
