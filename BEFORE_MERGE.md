@@ -49,10 +49,14 @@ first.
     tool through the MCP gateway, falling back to a direct call if the session fails; the setup agent only supplies the
     search space; `prediction_model.score` is called directly. A replacement must keep the tool's inputs and outputs and
     the element and route lists that `setup_agent.py` imports from `optimizer.py`.)
-14. **Phoenix traces link in the header** (`NEXT_PUBLIC_PHOENIX_URL`, read when the console is built; unset means
-    `http://localhost:6006`, empty hides the link; `render.yaml` sets the hosted address on `sdl-console-rr`). Its
-    hover note says "Read-only login, ask for access", which is **not true yet**: Phoenix has no login (item 4).
-    Protect Phoenix, or change the note in `lib/settings.ts` (`PHOENIX_TRACES_NOTE`), before sharing the link.
+14. **Phoenix traces link in the header** (`NEXT_PUBLIC_PHOENIX_URL`, read when the console is built). It should hold the
+    full address of the Phoenix project that receives the pipeline's traces, `sdl-control-plane` (locally
+    `http://localhost:6006/projects/UHJvamVjdDoz`, confirmed to hold a live run's spans). When it is set, the link opens
+    that page in a new tab with the hover note "Read-only login, ask for access"; when it is empty, the link goes to the
+    Traces section of the Architecture page. `render.yaml` starts it empty for the hosted console: set it after the
+    first deploy (DEPLOY.md). **Recheck the project address after any Phoenix reset or redeploy:** the project ID comes
+    from Phoenix's database and changes if that is lost. The hover note is **not true yet**: Phoenix has no login
+    (item 4), so protect Phoenix or change `PHOENIX_TRACES_NOTE` in `lib/settings.ts` before sharing the link.
 
 ## Checks
 

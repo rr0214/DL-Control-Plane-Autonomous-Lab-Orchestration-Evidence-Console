@@ -2,6 +2,7 @@ import AppHeader from "@/components/app/AppHeader";
 import ArchitectureTab from "@/components/ArchitectureTab";
 import SystemDiagram, { SystemDiagramLegend } from "@/components/SystemDiagram";
 import NodeMap from "@/components/architecture/NodeMap";
+import TracesSection from "@/components/architecture/TracesSection";
 import WhereAIFits from "@/components/architecture/WhereAIFits";
 
 // For an interviewer: what this build is, what runs where, and what is real. Opens without the password.
@@ -30,6 +31,7 @@ export default function ArchitecturePage() {
       </section>
       <WhereAIFits />
       <NodeMap />
+      <TracesSection />
       <ArchitectureTab />
     </main>
   );
