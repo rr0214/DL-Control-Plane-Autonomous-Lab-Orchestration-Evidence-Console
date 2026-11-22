@@ -9,6 +9,7 @@ import EvidenceLabel from "@/components/EvidenceLabel";
 import HistoryList from "./HistoryList";
 import { PlanResult, SampleRecord, apiFetch } from "@/lib/api";
 import { EvidenceKind } from "@/lib/evidence";
+import { REVIEW_DETAIL_ID, focusById } from "@/lib/focus";
 import { formatDateTime, formatDay } from "@/lib/format";
 import { ALREADY_DECIDED, clearPlan, errorText, loadPlan, savePlan } from "@/lib/planSession";
 import { ExampleRecipe } from "@/lib/seed/exampleRecipes";
@@ -91,11 +92,21 @@ export function ExampleRecipeDetail({ recipe: x }: { recipe: ExampleRecipe }) {
       </p>
       <Properties rows={x.properties} />
       {st.status === "needs_review" ? (
-        <Decide busy={false} onDecide={(d, note) => setRecipe(x.id, d === "approve" ? "accepted" : "rejected", note)} />
+        <Decide
+          busy={false}
+          onDecide={(d, note) => {
+            setRecipe(x.id, d === "approve" ? "accepted" : "rejected", note);
+            focusById(REVIEW_DETAIL_ID);
+          }}
+        />
       ) : (
         <div className="mt-4 space-y-2">
           {st.note && <p className="text-sm text-ink-800">Note: {st.note}</p>}
-          <button onClick={() => setRecipe(x.id, "needs_review", "Reopened")} className={`${BTN} bg-surface text-ink-800 ring-1 ring-ink-500 hover:bg-ink-50`}>
+          <button
+            onClick={() => {
+              setRecipe(x.id, "needs_review", "Reopened");
+              focusById(REVIEW_DETAIL_ID);
+            }} className={`${BTN} bg-surface text-ink-800 ring-1 ring-ink-500 hover:bg-ink-50`}>
             Reopen
           </button>
         </div>
@@ -153,6 +164,7 @@ export function LiveRecipeDetail({
       savePlan(next);
       await reloadCampaign();
       onDecided(`${decision === "approve" ? "Approved" : "Rejected"} ${sample.sample_id} (LIVE). Results are in Add experiment.`);
+      focusById(REVIEW_DETAIL_ID);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

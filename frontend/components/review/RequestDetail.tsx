@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Chip from "@/components/app/Chip";
 import SourceTag from "@/components/app/SourceTag";
 import HistoryList from "./HistoryList";
+import { REVIEW_DETAIL_ID, focusById } from "@/lib/focus";
 import { formatDateTime, formatDay } from "@/lib/format";
 import { LAB_LIMITS, RequestTargets, labCheck, suggestAdjustments } from "@/lib/labCheck";
 import { CustomerRequest } from "@/lib/seed/customerRequests";
@@ -82,7 +83,7 @@ function RejectForm({ onDone, onCancel }: { onDone: (reason: string, note: strin
         <div className="mt-2 grid gap-1 sm:grid-cols-2">
           {REJECT_REASONS.map((r) => (
             <label key={r} className="flex items-center gap-2 text-sm text-ink-800">
-              <input type="radio" name="reject-reason" value={r} checked={reason === r} onChange={() => setReason(r)} />
+              <input type="radio" name="reject-reason" value={r} checked={reason === r} onChange={() => setReason(r)} autoFocus={r === REJECT_REASONS[0]} />
               {r}
             </label>
           ))}
@@ -127,11 +128,12 @@ function AdjustForm({
       <div className="text-sm font-semibold text-ink-900">Send adjustments</div>
       <p className="text-xs text-ink-600">Prefilled with the suggested values. Change any of them.</p>
       <div className="mt-2 grid gap-2 sm:grid-cols-3">
-        {ROWS.map((r) => (
+        {ROWS.map((r, i) => (
           <label key={r.key} className="text-xs text-ink-800">
             {r.label} ({r.unit})
             <input
               type="number"
+              autoFocus={i === 0}
               min={0}
               step={r.key === "maxHafniumAtPct" ? "0.1" : "1"}
               value={draft[r.key]}
@@ -166,7 +168,24 @@ export default function RequestDetail({ request: r }: { request: CustomerRequest
   const st = requests[r.id];
   const [mode, setMode] = useState<"idle" | "reject" | "adjust">("idle");
   const check = labCheck(r.targets);
-  const reopen = () => setRequest(r.id, { status: "needs_review" }, { from: st.status, to: "needs_review", detail: "Reopened" });
+  const rejectBtn = useRef<HTMLButtonElement>(null);
+  const adjustBtn = useRef<HTMLButtonElement>(null);
+  const cancelled = useRef<"reject" | "adjust" | null>(null);
+  // Cancel returns focus to the button that opened the form.
+  useEffect(() => {
+    if (mode !== "idle" || !cancelled.current) return;
+    (cancelled.current === "reject" ? rejectBtn : adjustBtn).current?.focus();
+    cancelled.current = null;
+  }, [mode]);
+  const cancel = () => {
+    cancelled.current = mode === "idle" ? null : mode;
+    setMode("idle");
+  };
+  const decided = () => focusById(REVIEW_DETAIL_ID); // the pressed button is gone; continue from the detail panel
+  const reopen = () => {
+    setRequest(r.id, { status: "needs_review" }, { from: st.status, to: "needs_review", detail: "Reopened" });
+    decided();
+  };
 
   return (
     <article data-id={r.id} className="min-w-0 rounded-lg bg-surface p-4 ring-1 ring-ink-200">
@@ -196,18 +215,21 @@ export default function RequestDetail({ request: r }: { request: CustomerRequest
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => setMode("adjust")} className={PRIMARY}>
+              <button ref={adjustBtn} onClick={() => setMode("adjust")} className={PRIMARY}>
                 Send adjustments
               </button>
               <button
-                onClick={() => setRequest(r.id, { status: "accepted" }, { from: "needs_review", to: "accepted" })}
+                onClick={() => {
+                  setRequest(r.id, { status: "accepted" }, { from: "needs_review", to: "accepted" });
+                  decided();
+                }}
                 disabled={check.status === "cannot"}
                 title={check.status === "cannot" ? "Outside lab limits: send adjustments or reject" : undefined}
                 className={`${OUTLINE} disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 Accept
               </button>
-              <button onClick={() => setMode("reject")} className={OUTLINE}>
+              <button ref={rejectBtn} onClick={() => setMode("reject")} className={OUTLINE}>
                 Reject
               </button>
             </div>
@@ -216,17 +238,18 @@ export default function RequestDetail({ request: r }: { request: CustomerRequest
         )}
         {mode === "reject" && (
           <RejectForm
-            onCancel={() => setMode("idle")}
+            onCancel={cancel}
             onDone={(reason, note) => {
               setRequest(r.id, { status: "rejected", rejection: { reason, note } }, { from: "needs_review", to: "rejected", detail: reason });
               setMode("idle");
+              decided();
             }}
           />
         )}
         {mode === "adjust" && (
           <AdjustForm
             request={r}
-            onCancel={() => setMode("idle")}
+            onCancel={cancel}
             onDone={(targets, note) => {
               setRequest(
                 r.id,
@@ -234,6 +257,7 @@ export default function RequestDetail({ request: r }: { request: CustomerRequest
                 { from: "needs_review", to: "needs_review", detail: "Adjustments sent, waiting for the customer" },
               );
               setMode("idle");
+              decided();
             }}
           />
         )}

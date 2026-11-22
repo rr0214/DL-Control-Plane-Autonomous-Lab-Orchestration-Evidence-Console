@@ -8,6 +8,7 @@ import SourceTag from "@/components/app/SourceTag";
 import EvidenceLabel from "@/components/EvidenceLabel";
 import { SampleRecord } from "@/lib/api";
 import { EvidenceKind } from "@/lib/evidence";
+import { EXPERIMENT_DETAIL_ID, focusById, fromKeyboard } from "@/lib/focus";
 import { formatDay } from "@/lib/format";
 import { EXPERIMENTS, ExperimentStatus } from "@/lib/seed/internalExperiments";
 import { ACTIVE_STATUSES, useStore } from "@/lib/store";
@@ -225,7 +226,10 @@ export default function ActiveExperiments() {
                 <li key={i.id}>
                   <button
                     data-row={i.id}
-                    onClick={() => setSelected(i.id)}
+                    onClick={(e) => {
+                      setSelected(i.id);
+                      if (fromKeyboard(e)) focusById(EXPERIMENT_DETAIL_ID);
+                    }}
                     aria-current={active ? "true" : undefined}
                     className={`w-full rounded-lg bg-surface px-3 py-2 text-left ring-1 ${active ? "ring-2 ring-ink-900" : "ring-ink-200 hover:ring-ink-500"}`}
                   >
@@ -242,7 +246,14 @@ export default function ActiveExperiments() {
               );
             })}
           </ul>
-          <div className="min-w-0 lg:sticky lg:top-4">{current && <Detail key={current.id} item={current} />}</div>
+          <div
+            id={EXPERIMENT_DETAIL_ID}
+            tabIndex={-1}
+            aria-label="Selected experiment"
+            className="min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ink-900 lg:sticky lg:top-4"
+          >
+            {current && <Detail key={current.id} item={current} />}
+          </div>
         </div>
       )}
     </section>

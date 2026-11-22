@@ -1,14 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { EVIDENCE, EVIDENCE_KINDS } from "@/lib/evidence";
 
 // A small info button next to a results heading that explains the evidence labels.
 export default function EvidenceInfo() {
   const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
   return (
-    <span className="relative inline-block">
+    <span
+      className="relative inline-block"
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && open) {
+          setOpen(false);
+          btn.current?.focus();
+        }
+      }}
+    >
       <button
+        ref={btn}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}

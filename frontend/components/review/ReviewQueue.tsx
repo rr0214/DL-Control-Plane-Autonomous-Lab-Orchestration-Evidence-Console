@@ -6,6 +6,7 @@ import SourceTag from "@/components/app/SourceTag";
 import RequestDetail from "./RequestDetail";
 import { ExampleRecipeDetail, LiveRecipeDetail, liveStatus } from "./RecipeDetail";
 import { SampleRecord } from "@/lib/api";
+import { REVIEW_DETAIL_ID, focusById, fromKeyboard } from "@/lib/focus";
 import { formatDay } from "@/lib/format";
 import { CUSTOMER_REQUESTS, CustomerRequest } from "@/lib/seed/customerRequests";
 import { EXAMPLE_RECIPES, ExampleRecipe } from "@/lib/seed/exampleRecipes";
@@ -116,9 +117,10 @@ export default function ReviewQueue() {
                 <li key={row.key}>
                   <button
                     data-row={row.key}
-                    onClick={() => {
+                    onClick={(e) => {
                       setSelected(row.key);
                       setFlash(null);
+                      if (fromKeyboard(e)) focusById(REVIEW_DETAIL_ID); // keyboard: jump to the decision buttons
                     }}
                     aria-current={active ? "true" : undefined}
                     className={`w-full rounded-lg bg-surface px-3 py-2 text-left ring-1 ${active ? "ring-2 ring-ink-900" : "ring-ink-200 hover:ring-ink-500"}`}
@@ -142,7 +144,7 @@ export default function ReviewQueue() {
               );
             })}
           </ul>
-          <div className="min-w-0 lg:sticky lg:top-4">
+          <div id={REVIEW_DETAIL_ID} tabIndex={-1} aria-label="Selected item" className="min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ink-900 lg:sticky lg:top-4">
             {current?.kind === "request" && <RequestDetail key={current.key} request={current.r} />}
             {current?.kind === "example-recipe" && <ExampleRecipeDetail key={current.key} recipe={current.x} />}
             {current?.kind === "live-recipe" && (
