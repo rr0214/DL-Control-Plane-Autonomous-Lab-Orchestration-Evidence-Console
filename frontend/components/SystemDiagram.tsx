@@ -102,7 +102,7 @@ export default function SystemDiagram() {
 
         {/* ---- Browser ---- */}
         <Zone x={16} y={16} w={236} h={460} title="Browser: Next.js 15 console" sub="Render web service sdl-console" />
-        <Box x={30} y={66} w={208} h={66} kind="code" truth="example" title="Review queue" lines={["customer requests: example", "recipes: live from the API"]} />
+        <Box x={30} y={66} w={208} h={66} kind="code" truth="example" title="Review queue" lines={["requests: example data", "recipes: live"]} />
         <Box x={30} y={142} w={208} h={58} kind="code" truth="real" title="Add experiment" lines={["plan, review, results"]} />
         <Box x={30} y={210} w={208} h={58} kind="code" truth="example" title="Active experiments" lines={["live runs and examples"]} />
         <Box x={30} y={278} w={208} h={58} kind="code" truth="real" title="Architecture" lines={["step table from /api/loop"]} />

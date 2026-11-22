@@ -229,7 +229,7 @@ export default function AddExperiment() {
         </label>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-600">
           {source && <Chip tone="info">From {source}</Chip>}
-          {source && <SourceTag kind="example" />}
+          {source && <SourceTag kind={source.startsWith("plan-") ? "live" : "example"} />}
           <span>Your notes for this experiment. The planner works toward the campaign goal; this text is not sent.</span>
         </div>
         <textarea id="goal" rows={2} value={shownGoal} disabled={!!plan} onChange={(e) => setGoal(e.target.value)} className={INPUT} />
@@ -302,7 +302,7 @@ export default function AddExperiment() {
                     </div>
                   ))}
                 </dl>
-                <p className="mt-1 text-xs text-ink-600">Predicted by a mock lookup ({pending.risk.source}), not a trained model.</p>
+                <p className="mt-1 text-xs text-ink-600">Source: {pending.risk.source}.</p>
                 <label className="mt-3 block text-sm">
                   Note <span className="text-ink-600">(optional, saved with the decision)</span>
                   <textarea rows={2} maxLength={280} value={note} onChange={(e) => setNote(e.target.value)} className={INPUT} />
@@ -328,11 +328,30 @@ export default function AddExperiment() {
                 </p>
               </RecipeRow>
             )}
-            {autoPass.map((c) => (
-              <RecipeRow key={c.candidate_id} c={c} badge={<Chip tone="ok">Auto pass</Chip>}>
-                <p className="mt-1">Passed the safety gate and the risk check, so it goes ahead without a person.</p>
-              </RecipeRow>
-            ))}
+            {autoPass.map((c) => {
+              // After a review the plan has no pending sample, so label each recipe by what actually happened to it.
+              const t = plan.triage.find((x) => x.candidate_id === c.candidate_id);
+              const byPerson = t?.decision === "approve" || t?.decision === "reject" || t?.decision === "revise";
+              return (
+                <RecipeRow
+                  key={c.candidate_id}
+                  c={c}
+                  badge={
+                    byPerson ? (
+                      <Chip tone={t!.decision === "approve" ? "ok" : "danger"}>{t!.decision === "approve" ? "Approved by scientist" : "Rejected by scientist"}</Chip>
+                    ) : (
+                      <Chip tone="ok">Auto pass</Chip>
+                    )
+                  }
+                >
+                  <p className="mt-1">
+                    {byPerson
+                      ? `Passed the safety gate, then a scientist decided${t!.intuition_note ? `: "${t!.intuition_note}"` : "."}`
+                      : "Passed the safety gate and the risk check, so it goes ahead without a person."}
+                  </p>
+                </RecipeRow>
+              );
+            })}
           </section>
 
           {blocked.length > 0 && (
