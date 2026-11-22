@@ -5,8 +5,8 @@
 #   API      https://sdl-api-rr.onrender.com
 #   Phoenix  https://sdl-phoenix-rr.onrender.com
 #
-# Secrets are never stored here. ANTHROPIC_API_KEY and SDL_ACCESS_PASSWORD use sync: false,
-# so Render asks for them in the dashboard when the Blueprint is first applied.
+# Secrets are never stored here. ANTHROPIC_API_KEY, SDL_ACCESS_PASSWORD, PHOENIX_API_KEY, PHOENIX_SECRET and
+# PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD use sync: false: their values are set in the Render dashboard.
 
 services:
   # Backend: FastAPI, LangGraph and SQLite. Data and workflow checkpoints live on the persistent disk.
@@ -43,6 +43,10 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: SDL_ACCESS_PASSWORD
+        sync: false
+      # A system API key created in Phoenix (Settings, API keys) after its login is on. The API sends traces with it;
+      # without it the login-protected Phoenix rejects them (the app keeps working). Set in the dashboard.
+      - key: PHOENIX_API_KEY
         sync: false
 
   # Frontend: the Next.js console. NEXT_PUBLIC_API_URL is baked in at build time.
@@ -88,3 +92,14 @@ services:
         value: 0.0.0.0
       - key: PHOENIX_WORKING_DIR
         value: /mnt/phoenix
+      # Login. Phoenix 21 already requires it on a public host such as 0.0.0.0; this makes it explicit.
+      - key: PHOENIX_ENABLE_AUTH
+        value: "true"
+      - key: PHOENIX_USE_SECURE_COOKIES
+        value: "true"
+      # Secrets, set in the dashboard. PHOENIX_SECRET: at least 32 characters with a digit and a lowercase letter.
+      # PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD: replaces the default admin password "admin" while it is unchanged.
+      - key: PHOENIX_SECRET
+        sync: false
+      - key: PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD
+        sync: false

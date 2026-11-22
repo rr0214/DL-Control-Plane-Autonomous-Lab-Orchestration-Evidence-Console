@@ -23,8 +23,9 @@ export default function TracesSection() {
           <span className="font-mono"> sdl-phoenix-rr</span>, locally <span className="font-mono">backend/data/phoenix</span>.
         </li>
         <li>
-          Access: this build does not turn on a Phoenix login, so anyone with the Phoenix address can read the traces,
-          including prompts and Claude&apos;s replies. Only example data is sent there.
+          Access: the hosted Phoenix requires a login (render.yaml turns it on, and the API sends traces with a Phoenix API
+          key). The local Phoenix started by start.sh is open. Traces include prompts and Claude&apos;s replies, so only
+          example data is sent there.
         </li>
       </ul>
       <p className="mt-3 text-sm text-ink-800">

@@ -179,7 +179,7 @@ export default function SystemDiagram() {
         <Box x={1068} y={52} w={202} h={92} kind="ext" truth="fallback" title="Anthropic API: Claude" lines={["called by setup_agent and", "diagnose_flagged; no key or", "an error: mock, labeled mock"]} />
         <Box x={1068} y={178} w={202} h={124} kind="store" truth="real" title="SQLite: sdl.db" lines={["campaigns, runs, plans,", "samples, actions, releases,", "run_counts (daily limit)", "on the persistent disk"]} />
         <Box x={1068} y={322} w={202} h={78} kind="store" truth="real" title="SQLite: checkpoints" lines={["LangGraph SqliteSaver:", "a paused run survives a restart"]} />
-        <Box x={1068} y={430} w={202} h={104} kind="ext" truth="real" title="Arize Phoenix" lines={["trace viewer; live runs go to", "project sdl-control-plane;", "sdl-phoenix-rr, no login yet;", "traces kept on its 1 GB disk"]} />
+        <Box x={1068} y={430} w={202} h={104} kind="ext" truth="real" title="Arize Phoenix" lines={["trace viewer; live runs go to", "project sdl-control-plane;", "sdl-phoenix-rr: login required", "(open locally); 1 GB disk"]} />
 
         {/* cross-zone wires */}
         <Wire pts={[[238, 92], [300, 92]]} label="HTTPS" at={[269, 86]} />
