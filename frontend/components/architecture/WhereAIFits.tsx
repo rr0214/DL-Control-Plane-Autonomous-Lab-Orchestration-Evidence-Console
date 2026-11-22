@@ -1,4 +1,4 @@
-import { CHECKPOINT_NOTE, LOOP_STEPS, StepTag } from "@/lib/loopSteps";
+import { CHECKPOINT_NOTE, LOOP_STEPS, STEPS_ON_NODES, StepTag } from "@/lib/loopSteps";
 
 const TAG: Record<StepTag, string> = {
   Code: "bg-ink-100 text-ink-800 ring-ink-300",
@@ -15,8 +15,8 @@ export default function WhereAIFits() {
     <section className="rounded-lg bg-surface p-5 ring-1 ring-ink-200">
       <h2 className="text-lg font-semibold text-ink-900">Where ML and AI fit</h2>
       <p className="mt-1 text-sm text-ink-700">
-        Claude does two jobs: it sets up each batch and proposes a diagnosis. Plain code makes every safety decision. People
-        decide at review and release. The numeric models are stand-ins today.
+        {STEPS_ON_NODES} Claude does two jobs: it sets up each batch and proposes a diagnosis. Plain code makes every safety
+        decision. People decide at review and release. The numeric models are stand-ins today.
       </p>
       <ol className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {LOOP_STEPS.map((s, i) => (
@@ -30,7 +30,7 @@ export default function WhereAIFits() {
             </div>
             <span className={`mt-2 inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${TAG[s.tag]}`}>{s.tag}</span>
             <p className="mt-2 text-xs text-ink-800">{s.note}</p>
-            <p className="mt-auto pt-2 font-mono text-[11px] text-ink-600">{s.where}</p>
+            <p className="mt-auto pt-2 font-mono text-[11px] text-ink-600">{s.nodes.length ? `node: ${s.nodes.join(", ")}` : "outside the graph"}</p>
           </li>
         ))}
       </ol>

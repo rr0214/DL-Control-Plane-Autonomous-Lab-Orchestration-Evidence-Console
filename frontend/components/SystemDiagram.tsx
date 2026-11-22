@@ -74,21 +74,35 @@ function Wire({ pts, label, at, dashed = false }: { pts: [number, number][]; lab
   );
 }
 
+// A graph node that contains several parts: a labeled frame around them.
+function NodeFrame({ x, w, id, note }: { x: number; w: number; id: string; note: string }) {
+  return (
+    <g>
+      <rect x={x} y={R2} width={w} height={IR - R2 + NH + 8} rx={7} className="fill-ink-50 stroke-ink-500" strokeWidth={1.25} />
+      <text x={x + 8} y={R2 + 14} className="fill-ink-900 font-mono text-[11px] font-semibold">
+        {id}
+        <tspan className="fill-ink-600 font-sans text-[9.5px] font-normal"> graph node: {note}</tspan>
+      </text>
+    </g>
+  );
+}
+
 // Pipeline geometry: two rows of five nodes inside the orchestrator.
 const COL = [312, 452, 592, 732, 872];
 const NW = 128;
 const NH = 72;
 const R1 = 186;
-const R2 = 294;
+const R2 = 292; // top of the two node frames in row 2
+const IR = R2 + 20; // inner boxes inside those frames
 
 export default function SystemDiagram() {
   return (
     <div className="overflow-x-auto">
-      <svg viewBox="0 0 1300 700" className="min-w-[960px]" role="img" aria-labelledby="sysdiag-title sysdiag-desc">
+      <svg viewBox="0 0 1300 712" className="min-w-[960px]" role="img" aria-labelledby="sysdiag-title sysdiag-desc">
         <title id="sysdiag-title">System architecture of the SDL Control Plane</title>
         <desc id="sysdiag-desc">
-          A Next.js console calls a FastAPI service over HTTPS. Inside it, a LangGraph pipeline runs ten steps in a fixed
-          order, calls three MCP tools, writes to two SQLite files, calls Claude, and sends traces to Arize Phoenix.
+          A Next.js console calls a FastAPI service over HTTPS. Inside it, a LangGraph graph of seven nodes runs in a fixed
+          order (scientist review, make and measure and the measurement check run inside one node), and calls three MCP tools, writes to two SQLite files, calls Claude, and sends traces to Arize Phoenix.
           Optimizer, prediction, synthesis and measurement are simulated.
         </desc>
         <defs>
@@ -109,13 +123,13 @@ export default function SystemDiagram() {
         <Box x={30} y={346} w={208} h={80} kind="code" truth="real" title="PasswordGate + apiFetch" lines={["adds X-Access-Password", "and X-Role to every call;", "shows the 429 run-limit message"]} />
 
         {/* ---- API service ---- */}
-        <Zone x={286} y={16} w={734} h={668} title="API service: FastAPI + LangGraph (Python)" sub="Render web service sdl-api, 1 GB persistent disk" />
+        <Zone x={286} y={16} w={734} h={684} title="API service: FastAPI + LangGraph (Python)" sub="Render web service sdl-api, 1 GB persistent disk" />
         <Box x={300} y={52} w={706} h={60} kind="code" truth="real" title="HTTP edge (api.py)"
           lines={["CORS allow-list · shared access password on every route but /health · daily plan-run limit (429)", "role check from the X-Role header: enforced on the server, but not real sign-in"]} />
 
-        <rect x={300} y={122} width={706} height={262} rx={8} className="fill-surface stroke-ink-300" strokeWidth={1} strokeDasharray="2 2" />
-        <text x={312} y={140} className="fill-ink-900 text-[11.5px] font-semibold">CampaignOrchestrator: LangGraph StateGraph, fixed edges</text>
-        <text x={312} y={154} className="fill-ink-500 text-[10px]">Agents act inside a step; they never choose the next step. A pause is saved and resumed from a checkpoint.</text>
+        <rect x={300} y={122} width={706} height={278} rx={8} className="fill-surface stroke-ink-300" strokeWidth={1} strokeDasharray="2 2" />
+        <text x={312} y={140} className="fill-ink-900 text-[11.5px] font-semibold">CampaignOrchestrator: LangGraph StateGraph, 7 nodes, fixed edges</text>
+        <text x={312} y={154} className="fill-ink-500 text-[10px]">Agents act inside a node and never choose the next one. A pause is saved and resumed from a checkpoint.</text>
 
         <Box x={COL[0]} y={R1} w={NW} h={NH} kind="code" truth="real" title="target_check" lines={["lab limits; stops", "impossible targets"]} />
         <Box x={COL[1]} y={R1} w={NW} h={NH} kind="llm" truth="fallback" title="setup_agent" lines={["Claude sets the", "search space"]} />
@@ -123,40 +137,43 @@ export default function SystemDiagram() {
         <Box x={COL[3]} y={R1} w={NW} h={NH} kind="ml" truth="sim" title="prediction_model" lines={["fixed lookup, no", "trained model"]} />
         <Box x={COL[4]} y={R1} w={NW} h={NH} kind="code" truth="real" title="policy_kernel" lines={["safety gate: blocks Hf", "and failed repeats"]} />
 
-        <Box x={COL[0]} y={R2} w={NW} h={NH} kind="person" truth="real" title="scientist review" lines={["interrupt() pauses;", "risk signals are mock"]} />
-        <Box x={COL[1]} y={R2} w={NW} h={NH} kind="code" truth="sim" title="make + measure" lines={["no real synthesis;", "scan and values faked"]} />
-        <Box x={COL[2]} y={R2} w={NW} h={NH} kind="code" truth="real" title="check.py" lines={["measurement check", "on simulated data"]} />
-        <Box x={COL[3]} y={R2} w={NW} h={NH} kind="llm" truth="fallback" title="diagnose_flagged" lines={["Claude proposes", "re-measure or hold"]} />
-        <Box x={COL[4]} y={R2} w={NW} h={NH} kind="code" truth="real" title="action_gate.py" lines={["only re-measure or", "hold; fails closed"]} />
+        {/* Row 2: two graph nodes. Their inner parts are drawn inside them, because they are not separate nodes. */}
+        <NodeFrame x={304} w={416} id="triage_and_hitl" note="pause for review, then make, measure and check" />
+        <NodeFrame x={726} w={276} id="diagnose_flagged" note="propose, then gate" />
+        <Box x={312} y={IR} w={NW} h={NH} kind="person" truth="real" title="scientist review" lines={["interrupt() pauses;", "risk signals are mock"]} />
+        <Box x={450} y={IR} w={NW} h={NH} kind="code" truth="sim" title="make + measure" lines={["no real synthesis;", "scan and values faked"]} />
+        <Box x={588} y={IR} w={NW} h={NH} kind="code" truth="real" title="check.py" lines={["measurement check", "on simulated data"]} />
+        <Box x={734} y={IR} w={NW} h={NH} kind="llm" truth="fallback" title="diagnosis.py" lines={["Claude proposes", "re-measure or hold"]} />
+        <Box x={870} y={IR} w={NW} h={NH} kind="code" truth="real" title="action_gate.py" lines={["only re-measure or", "hold; fails closed"]} />
 
         {/* pipeline wires */}
         {COL.slice(0, 4).map((c, i) => (
           <Wire key={`r1-${i}`} pts={[[c + NW, R1 + NH / 2], [COL[i + 1], R1 + NH / 2]]} />
         ))}
         <Wire pts={[[COL[4] + NW / 2, R1 + NH], [COL[4] + NW / 2, R1 + NH + 10], [COL[0] + NW / 2, R1 + NH + 10], [COL[0] + NW / 2, R2]]} />
-        {COL.slice(0, 4).map((c, i) => (
-          <Wire key={`r2-${i}`} pts={[[c + NW, R2 + NH / 2], [COL[i + 1], R2 + NH / 2]]} />
+        {[[440, 450], [578, 588], [716, 734], [862, 870]].map(([a, b]) => (
+          <Wire key={`r2-${a}`} pts={[[a, IR + NH / 2], [b, IR + NH / 2]]} />
         ))}
         <Wire pts={[[300, R1 + NH / 2], [COL[0], R1 + NH / 2]]} />
 
-        <Box x={COL[0]} y={398} w={268} h={52} kind="person" truth="real" title="release.py: release check" lines={["compares results with customer targets"]} />
-        <Box x={COL[2]} y={398} w={268} h={52} kind="code" truth="real" title="history.py: save and learn" lines={["writes outcomes back for the next plan"]} />
-        <Box x={COL[4]} y={398} w={NW} h={52} kind="code" truth="real" title="telemetry.py" lines={["OpenTelemetry spans"]} />
+        <Box x={COL[0]} y={414} w={268} h={52} kind="person" truth="real" title="release.py: release check" lines={["compares results with customer targets"]} />
+        <Box x={COL[2]} y={414} w={268} h={52} kind="code" truth="real" title="history.py: save and learn" lines={["writes outcomes back for the next plan"]} />
+        <Box x={COL[4]} y={414} w={NW} h={52} kind="code" truth="real" title="telemetry.py" lines={["OpenTelemetry spans"]} />
 
-        <rect x={300} y={466} width={706} height={128} rx={8} className="fill-surface stroke-ink-300" strokeWidth={1} strokeDasharray="2 2" />
-        <text x={312} y={484} className="fill-ink-900 text-[11.5px] font-semibold">MCP tool gateway (mcp_server.py): FastMCP, in-memory session</text>
-        <text x={312} y={498} className="fill-ink-500 text-[10px]">If the MCP session fails, the same functions run directly; every trace records which way.</text>
-        <Box x={312} y={512} w={220} h={70} kind="ml" truth="sim" title="propose_alloy_ratios" lines={["ratios from a fixed table", "(the optimizer step)"]} />
-        <Box x={544} y={512} w={220} h={70} kind="code" truth="real" title="check_negative_runs" lines={["SQL lookup of failed runs", "with the same recipe"]} />
-        <Box x={776} y={512} w={218} h={70} kind="code" truth="real" title="search_calphad_literature" lines={["curated list of 6 papers,", "DOIs checked; local search"]} />
-        <Wire dashed pts={[[586, 384], [586, 466]]} />
-        <text x={594} y={460} className="fill-ink-600 text-[9.5px]">MCP calls from setup_agent, optimizer, policy_kernel</text>
+        <rect x={300} y={482} width={706} height={128} rx={8} className="fill-surface stroke-ink-300" strokeWidth={1} strokeDasharray="2 2" />
+        <text x={312} y={500} className="fill-ink-900 text-[11.5px] font-semibold">MCP tool gateway (mcp_server.py): FastMCP, in-memory session</text>
+        <text x={312} y={514} className="fill-ink-500 text-[10px]">If the MCP session fails, the same functions run directly; every trace records which way.</text>
+        <Box x={312} y={528} w={220} h={70} kind="ml" truth="sim" title="propose_alloy_ratios" lines={["ratios from a fixed table", "(the optimizer step)"]} />
+        <Box x={544} y={528} w={220} h={70} kind="code" truth="real" title="check_negative_runs" lines={["SQL lookup of failed runs", "with the same recipe"]} />
+        <Box x={776} y={528} w={218} h={70} kind="code" truth="real" title="search_calphad_literature" lines={["curated list of 6 papers,", "DOIs checked; local search"]} />
+        <Wire dashed pts={[[586, 400], [586, 482]]} />
+        <text x={594} y={476} className="fill-ink-600 text-[9.5px]">MCP calls from setup_agent, optimizer, policy_kernel</text>
 
-        <Box x={300} y={612} w={706} h={56} kind="code" truth="real" title="Routes"
+        <Box x={300} y={628} w={706} h={56} kind="code" truth="real" title="Routes"
           lines={["/api/campaigns/plan · /api/samples/{id}/review · /api/samples/{id}/release · /api/loop · /api/demo/reset · /health (open)"]} />
 
         {/* ---- Data and outside services ---- */}
-        <Zone x={1054} y={16} w={230} h={668} title="Data and outside services" sub="" />
+        <Zone x={1054} y={16} w={230} h={684} title="Data and outside services" sub="" />
         <Box x={1068} y={52} w={202} h={92} kind="ext" truth="fallback" title="Anthropic API: Claude" lines={["called by setup_agent and", "diagnose_flagged; no key or", "an error: mock, labeled mock"]} />
         <Box x={1068} y={178} w={202} h={124} kind="store" truth="real" title="SQLite: sdl.db" lines={["campaigns, runs, plans,", "samples, actions, releases,", "run_counts (daily limit)", "on the persistent disk"]} />
         <Box x={1068} y={322} w={202} h={78} kind="store" truth="real" title="SQLite: checkpoints" lines={["LangGraph SqliteSaver:", "a paused run survives a restart"]} />
@@ -167,7 +184,7 @@ export default function SystemDiagram() {
         <Wire pts={[[1006, 160], [1040, 160], [1040, 120], [1068, 120]]} label="HTTPS" at={[1030, 154]} />
         <Wire pts={[[1006, 240], [1068, 240]]} label="SQL" at={[1037, 234]} />
         <Wire pts={[[1006, 360], [1068, 360]]} label="every step" at={[1037, 354]} />
-        <Wire pts={[[COL[4] + NW, 424], [1040, 424], [1040, 476], [1068, 476]]} label="OTLP/HTTP" at={[1037, 418]} />
+        <Wire pts={[[COL[4] + NW, 440], [1040, 440], [1040, 476], [1068, 476]]} label="OTLP/HTTP" at={[1037, 434]} />
       </svg>
     </div>
   );
