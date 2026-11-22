@@ -31,6 +31,10 @@ first.
 10. **Key status in the API (future change).** The banner says Claude replies are mocked when the newest run used
    mock replies, because the API does not report whether `ANTHROPIC_API_KEY` is set. Before any run it shows the
    default text. A small field on `/api/health` (for example `llm: "anthropic" | "mock"`) would make it exact.
+11. **Diagnosis replies are cut off (backend, future change).** In a live run on 2026-11-22 (thread e2e-202158) the
+   diagnosis agent called Claude for real, but its reply stopped at exactly 400 output tokens, the `max_tokens=400` in
+   `backend/app/diagnosis.py`. The JSON was incomplete, so the code gate fell back to hold (INVALID_PROPOSAL). The
+   outcome is safe, but the agent's own proposal is lost. Raising the limit or shortening the requested reason fixes it.
 
 ## Checks
 
