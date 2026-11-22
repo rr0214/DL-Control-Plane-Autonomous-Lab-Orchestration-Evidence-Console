@@ -34,6 +34,7 @@ export type LoopStep = {
   nodes: GraphNode[]; // the graph nodes it runs on; empty when it runs outside the graph
   outside?: string; // where it runs when it is not a graph node
   note: string;
+  detail?: string; // one more line on the card
 };
 
 export const PHASES: { n: 1 | 2 | 3 | 4; name: string; checkpoint: boolean }[] = [
@@ -53,6 +54,10 @@ export const LOOP_STEPS: LoopStep[] = [
     where: "optimizer, prediction_model",
     nodes: ["optimizer", "prediction_model"],
     note: "A fixed table and a fixed lookup, no trained model. This is where a real model plugs in.",
+    // Checked against graph.py: the optimizer node calls the propose_alloy_ratios tool through the MCP gateway, and the
+    // setup agent only supplies the search space. The prediction lookup is a plain function call, not MCP.
+    detail:
+      "The optimizer is called through MCP, so a real optimizer can replace this mock without changing the setup agent. The prediction lookup is a plain function call.",
   },
   { name: "Safety gate", phase: 2, checkpoint: true, tag: "Code", where: "policy_kernel", nodes: ["policy_kernel"], note: "Blocks restricted elements and repeats of failed runs." },
   { name: "Scientist review", phase: 2, tag: "Person", where: "triage_and_hitl (pause)", nodes: ["triage_and_hitl"], note: "A person approves or rejects a risky recipe before anything is made." },

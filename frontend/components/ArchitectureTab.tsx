@@ -76,6 +76,9 @@ export default function ArchitectureTab() {
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-ink-700">
+        <span className="font-medium text-ink-900">MCP tool gateway in this build:</span> {mcpText}
+      </p>
       <Collapsible title="Step details, read from the backend">
         {/* Wide screens: a table. */}
         <div className="mt-4 hidden overflow-hidden rounded-lg ring-1 ring-ink-200 md:block">
@@ -129,18 +132,6 @@ export default function ArchitectureTab() {
         <p className="mt-3 text-xs text-ink-500">
           LLM is a language model, ML is a numeric model, code is plain deterministic code, person is a human decision. Mock means a stand-in with demo values. Simulated means the readings are generated, not measured. The gate, the
           review pause, the receipts and the tracing are real.
-        </p>
-      </Collapsible>
-
-      <Collapsible title="What is MCP?">
-        <p>
-          MCP (Model Context Protocol) is a standard way for an agent or the graph to call tools. Think of a USB standard for AI
-          tools: the caller asks for a tool by name, and any tool that follows the standard plugs in. That lets me swap the
-          mock optimizer for a real one without changing the setup agent.
-        </p>
-        <p className="mt-2">
-          A tool is a function the model can ask the system to run, such as looking up past failed runs. It is not another
-          model. In this build, MCP is {mcpText}
         </p>
       </Collapsible>
 

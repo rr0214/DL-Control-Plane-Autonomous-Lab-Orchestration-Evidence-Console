@@ -36,6 +36,19 @@ first.
    `backend/app/diagnosis.py`. The JSON was incomplete, so the code gate fell back to hold (INVALID_PROPOSAL). The
    outcome is safe, but the agent's own proposal is lost. Raising the limit or shortening the requested reason fixes it.
 
+## Page content changes to review
+
+12. **"What is MCP?" panel removed from the Architecture page.** Its live status line was kept and moved just above
+    "Step details, read from the backend" (unchanged): "MCP tool gateway in this build: Active right now (FastMCP
+    session)", or the direct-fallback wording, read from `/api/health`.
+13. **Optimizer and prediction card gets one more line.** Requested: "Called through MCP, so a real optimizer can replace
+    this mock without changing the setup agent." Corrected after checking the code, because the card covers two steps:
+    "The optimizer is called through MCP, so a real optimizer can replace this mock without changing the setup agent.
+    The prediction lookup is a plain function call." (In `graph.py` the optimizer node calls the `propose_alloy_ratios`
+    tool through the MCP gateway, falling back to a direct call if the session fails; the setup agent only supplies the
+    search space; `prediction_model.score` is called directly. A replacement must keep the tool's inputs and outputs and
+    the element and route lists that `setup_agent.py` imports from `optimizer.py`.)
+
 ## Checks
 
 11. **Backend tests pass:** `cd backend && .venv/bin/python -m pytest -q`.

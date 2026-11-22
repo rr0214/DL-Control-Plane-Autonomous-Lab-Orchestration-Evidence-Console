@@ -30,6 +30,7 @@ export default function WhereAIFits() {
             </div>
             <span className={`mt-2 inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${TAG[s.tag]}`}>{s.tag}</span>
             <p className="mt-2 text-xs text-ink-800">{s.note}</p>
+            {s.detail && <p className="mt-1 text-xs text-ink-700">{s.detail}</p>}
             <p className="mt-auto pt-2 font-mono text-[11px] text-ink-600">{s.nodes.length ? `node: ${s.nodes.join(", ")}` : "outside the graph"}</p>
           </li>
         ))}
